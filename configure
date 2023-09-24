@@ -1,0 +1,336 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o pipefail
+set -o nounset
+
+show_help() 
+{
+	cat <<EOF
+	Usage: configure [options]
+Configuration:
+  --help                    print this message
+  --target=TARGET           cross-compile target
+Directory and file names:
+  --bindir=DIR
+  --datadir=DIR
+  --datarootdir=DIR
+  --docdir=DIR
+  --exec-prefix=DIR
+  --includedir=DIR
+  --infodir=DIR
+  --libdir=DIR
+  --libexecdir=DIR
+  --localedir=DIR
+  --localstatedir=DIR
+  --mandir=DIR
+  --prefix=DIR
+  --sbindir=DIR
+  --sharedstatedir=DIR
+  --sysconfdir=DIR
+
+EOF
+}
+
+QUIET=0
+DEPS=1
+
+while :; do
+	case ${1:-} in
+		-h|--help) show_help; exit ;;
+		--quiet) QUIET=1 ;;
+		--bindir=?*) BINDIR=${1#*=} ;;
+		--datadir=?*) DATADIR=${1#*=} ;;
+		--datarootdir=?*) DATAROOTDIR=${1#*=} ;;
+		--docdir=?*) DOCDIR=${1#*=} ;;
+		--exec-prefix=?*) EXECPREFIX=${1#*=} ;;
+		--includedir=?*) INCLUDEDIR=${1#*=} ;;
+		--infodir=?*) INFODIR=${1#*=} ;;
+		--libdir=?*) LIBDIR=${1#*=} ;;
+		--libexecdir=?*) LIBEXECDIR=${1#*=} ;;
+		--localedir=?*) LOCALEDIR=${1#*=} ;;
+		--localstatedir=?*) LOCALSTATEDIR=${1#*=} ;;
+		--mandir=?*) MANDIR=${1#*=} ;;
+		--prefix=?*) PREFIX=${1#*=} ;;
+		--sbindir=?*) SBINDIR=${1#*=} ;;
+		--sharedstatedir=?*) SHAREDSTATEDIR=${1#*=} ;;
+		--sysconfdir=?*) SYSCONFDIR=${1#*=} ;;
+		--target=?*) TARGET=${1#*=} ;;
+# These are added to keep RPM %configure error free		
+		--build=?*) BUILD=${1#*=} ;;
+		--host=?*) HOST=${1#*=} ;;
+		--program-prefix=?*) PROGPREFIX=${1#*=} ;;
+		--program-prefix=) PROGPREFIX= ;;
+		--disable-dependency-tracking) DEPS=0 ;;
+		--enable-dependency-tracking) DEPS=1 ;;
+		*) [[ -n "${1-}" ]] && { echo "Unknown argument ${1}" >&2; exit 1; } ;;
+	esac
+	shift || break
+done
+
+# log all of the scripts output to config.log
+if [[ ${QUIET} == 0 ]]; then
+	exec &> >(tee config.log)
+else
+	exec &>config.log
+fi
+
+OBJDIR=$(pwd)
+SRCDIR=$(dirname "${0}")
+
+if [[ "$(realpath "${OBJDIR}")" = "$(realpath "${SRCDIR}")" ]]; then
+	echo "Building inside source directory."
+fi
+
+# Default file locations, or use env provided ones
+
+PREFIX=${PREFIX:-/usr/local}
+[[ "${PREFIX}" = "/" ]] &&  PREFIX=""
+EXECPREFIX=${EXECPREFIX:-${PREFIX}}
+DATAROOTDIR=${DATAROOTDIR:-${PREFIX}/share}
+BINDIR=${BINDIR:-${EXECPREFIX}/bin}
+DATADIR=${DATADIR:-${DATAROOTDIR}}
+DOCDIR=${DOCDIR:-${DATAROOTDIR}/doc}
+INCLUDEDIR=${INCLUDEDIR:-${PREFIX}/include}
+INFODIR=${INFODIR:-${DATAROOTDIR}/info}
+LIBDIR=${LIBDIR:-${PREFIX}/lib}
+LIBEXECDIR=${LIBEXECDIR:-${EXECPREFIX}/libexec}
+LOCALEDIR=${LOCALEDIR:-${DATAROOTDIR}/locale}
+LOCALSTATEDIR=${LOCALSTATEDIR:-${PREFIX}/var}
+MANDIR=${MANDIR:-${DATAROOTDIR}/man}
+SBINDIR=${SBINDIR:-${EXECPREFIX}/sbin}
+SHAREDSTATEDIR=${SHAREDSTATEDIR:-${PREFIX}/var/lib}
+SYSCONFDIR=${SYSCONFDIR:-${PREFIX}/etc}
+TARGET=${TARGET:-}
+YACC=${YACC:-yacc}
+LEX=${LEX:-lex}
+LFLAGS=${LFLAGS:-}
+YFLAGS=${YFLAGS:-}
+
+[[ -n "${TARGET}" ]] && TOOL="${TARGET}-" || TOOL=""
+
+# Default compiler flags
+
+CFLAGS=${CFLAGS:--O2 -Wall -Wextra}
+CPPFLAGS=${CPPFLAGS:-}
+LDFLAGS=${LDFLAGS:-}
+TARGET=${TARGET:-}
+
+# Location of default tools
+
+PKG_CONFIG=${PKG_CONFIG:-pkg-config}
+CC=${CC:-${TOOL}gcc}
+CXX=${CXX:-${TOOL}g++}
+
+# Predefined values, which should not be easily changed
+
+PACKAGE=$(cat "${SRCDIR}"/misc/PACKAGE)
+VERSION=$(cat "${SRCDIR}"/misc/VERSION)
+
+# Check for a c compiler (mandatory)
+
+echo -n "Checking for a C compiler ... "
+if [[ ! -x "$(which "${CC}")" ]]; then
+	fail "Error: CC not valid"
+else
+	export CC
+	which "${CC}" | tee -a config.log
+fi
+
+echo -n "Checking $(basename "${CC}") can produce executables ... "
+echo -e '#include <stdlib.h>\nmain() {exit(0);}' | \
+	if gcc -xc -o /dev/null - 2>>config.log; then 
+		echo "Ok"
+	else 
+		{ echo "Fail"; exit 1; } 
+	fi
+
+HOST_MACHINE=$(${CC} -dumpmachine)
+
+echo -n "Configuring ${PACKAGE} ${VERSION} on ${HOST_MACHINE}"
+[[ -n "${TARGET}" ]] &&	echo " for target ${TARGET}" || echo ""
+
+echo "objdir = ${OBJDIR} / srcdir = ${SRCDIR}"
+
+# List of system headers we need to check for
+
+H_FILES="stdlib.h stdint.h stdio.h string.h getopt.h err.h dirent.h errno.h ctype.h sys/time.h sys/types.h pwd.h grp.h unistd.h sys/utsname.h sys/stat.h fcntl.h time.h stdbool.h limits.h"
+
+# List of system functions to check for function:arg0,arg1
+
+FUNC_CHECK=""
+
+# List of pkg-config things to check for
+
+PKG_CHECK=""
+
+# List of libraries to check for here
+
+LIB_CHECK=""
+
+# Application specific variables
+
+# Check for pkg-config (mandatory)
+
+echo -n "Checking for pkg-config ... "
+if [[ ! -x "$(which "${PKG_CONFIG}")" ]]; then
+	fail "Error: PKG_CONFIG not valid"
+fi
+
+export PKG_CONFIG
+which "${PKG_CONFIG}"
+
+# Support functions
+
+check_pkg() 
+{
+	echo -n "Checking for $1 ... "
+	"${PKG_CONFIG}" --exists "${1}"
+	local RT=$?
+	ok ${RT}
+	return ${RT}
+}
+
+fail()
+{
+	echo "${1}"
+	exit 1
+}
+
+check_header()
+{
+	echo -n "Checking for ${1} ... "
+	echo "#include <${1}>" | \
+		"${CC}" "${CFLAGS}" "${CPPFLAGS}" "${LDFLAGS}" -E - -o /dev/null 2>>config.log
+	local RT=$?
+	ok $?
+	return ${RT}
+}
+
+check_lib()
+{
+	local F=/tmp/$$.c
+
+	echo "#define _GNU_SOURCE" >${F}
+	echo 'main(){}' >>${F}
+	echo -n "Checking for -l${1} ... "
+	"${CC}" "${LDFLAGS}" "${CPPFLAGS}" "${CFLAGS}" -l"${1}" "${F}" \
+		-o /dev/null 2>>config.log
+	local RT=$?
+	ok ${RT}
+	rm -f ${F}
+	return ${RT}
+}
+
+ok()
+{
+	[[ $1 -eq 0 ]] && echo "ok" ||  echo "not found"
+}
+
+check_func()
+{
+	local F=/tmp/$$.c
+	local FUNC
+	FUNC="$(echo "${1}" | cut -d: -f1)"
+	local ARGS
+	ARGS="$(echo "${1}" | cut -d: -f2-)"
+
+	echo "#define _GNU_SOURCE" >${F}
+	for i in ${H_FILES} ; do
+		echo "#include <${i}>" >>${F}
+	done
+	echo "void main() { ${FUNC}(${ARGS}); }" >>${F}
+	echo -n "Checking for ${FUNC}() ... "
+	"${CC}" "${LDFLAGS}" "${CPPFLAGS}" "${CFLAGS}" "${F}" -o /dev/null 2>>config.log
+	local RT=$?
+
+	ok ${RT}
+	rm -f ${F}
+	return ${RT}
+}
+
+# start a new configuration file
+if [[ -e ${OBJDIR}/config.h ]]; then 
+	mv -f "${OBJDIR}"/config.h "${OBJDIR}"/config.h~
+fi
+rm -f "${OBJDIR}"/config.h
+
+# kludge any defines here
+
+# set-up defines
+echo "#define VERSION \"${VERSION}\"" >> "${OBJDIR}"/config.h
+
+# package checks
+
+for f in ${PKG_CHECK} ; do
+	if check_pkg "${f}"; then
+		CFLAGS="${CFLAGS} $(${PKG_CONFIG} --cflags "${f}")"
+		LDFLAGS="${LDFLAGS} $(${PKG_CONFIG} --libs "${f}")"
+	fi
+done
+
+# library checks
+
+for f in ${LIB_CHECK} ; do
+	if check_lib "${f}"; then LDFLAGS="${LDFLAGS} -l${f}" ; fi
+done
+
+# Perform checks for system headers and functions
+# This is done here to ensure relevant libraries are linked etc.
+
+for f in ${H_FILES} ; do
+	def=$(echo "${f}" | sed "s#/#_#;s#\.#_#;s#/#_#;" | tr "[:lower:]" "[:upper:]")
+    if check_header "${f}"; then 
+		echo "#define HAVE_${def} 1" >> "${OBJDIR}"/config.h
+	fi
+done
+
+for f in ${FUNC_CHECK}; do
+	def=$(echo "${f}" | cut -d: -f1 | tr "[:lower:]" "[:upper:]")
+	if check_func "${f}"; then 
+		echo "#define HAVE_${def} 1" >> "${OBJDIR}"/config.h
+	fi
+done
+
+# Append any *DIR variables to config.h here
+
+# Create Makefile from template
+
+echo "Writing Makefile"
+
+ARGS=$(cat <<- __END
+	s#@@DEPS@@#${DEPS}#;
+	s#@@BINDIR@@#${BINDIR}#;
+	s#@@DOCDIR@@#${DOCDIR}#;
+	s#@@CC@@#${CC}#;
+	s#@@CFLAGS@@#${CFLAGS}#;
+	s#@@CPPFLAGS@@#${CPPFLAGS}#;
+	s#@@CXX@@#${CXX}#;
+	s#@@LFLAGS@@#${LFLAGS}#;
+	s#@@YFLAGS@@#${YFLAGS}#;
+	s#@@DATADIR@@#${DATADIR}#;
+	s#@@DATAROOTDIR@@#${DATAROOTDIR}#;
+	s#@@EXECPREFIX@@#${EXECPREFIX}#;
+	s#@@INFODIR@@#${INFODIR}#;
+	s#@@LDFLAGS@@#${LDFLAGS}#;
+	s#@@LIBDIR@@#${LIBDIR}#;
+	s#@@LIBEXECDIR@@#${LIBEXECDIR}#;
+	s#@@LOCALEDIR@@#${LOCALEDIR}#;
+	s#@@LOCALSTATEDIR@@#${LOCALSTATEDIR}#;
+	s#@@MANDIR@@#${MANDIR}#;
+    s#@@PREFIX@@#${PREFIX}#;
+	s#@@OBJDIR@@#${OBJDIR}#;
+	s#@@SBINDIR@@#${SBINDIR}#;
+	s#@@SHAREDSTATEDIR@@#${SHAREDSTATEDIR}#;
+	s#@@SRCDIR@@#${SRCDIR}#;
+	s#@@SYSCONFDIR@@#${SYSCONFDIR}#;
+	s#@@YACC@@#${YACC}#;
+	s#@@LEX@@#${LEX}#;
+__END
+)
+
+sed "${ARGS}" <"${SRCDIR}"/Makefile.in >"${OBJDIR}"/Makefile
+
+echo "Please type make to continue"
+
+exit 0

@@ -1,0 +1,9 @@
+fail-syslogd
+*.o
+*~
+config.h
+Makefile
+*.pid
+*.log
+*.conf
+.d

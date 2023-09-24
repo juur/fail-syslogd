@@ -1,0 +1,115 @@
+SHELL = /bin/sh
+
+srcdir := @@SRCDIR@@
+objdir := @@OBJDIR@@
+
+.SUFFIXES:
+.SUFFIXES: .c .o
+
+DESTDIR         := 
+CC              := @@CC@@
+CXX             := @@CXX@@
+LEX             := @@LEX@@
+YACC		    := @@YACC@@
+LFLAGS          := @@LFLAGS@@
+YFLAGS          := @@YFLAGS@@ -d -t
+CFLAGS          := @@CFLAGS@@ -std=c99
+CPPFLAGS        := @@CPPFLAGS@@
+LDFLAGS         := -L$(srcdir)/src -L$(objdir) -L. @@LDFLAGS@@
+CAT             := cat
+CP              := cp
+TAR             := tar
+RM              ?= rm -f
+MKDIR           := mkdir -p
+PKGCONFIG       := pkg-config
+VERSION         := $(shell $(CAT) "$(srcdir)/misc/VERSION")
+PACKAGE         := $(shell $(CAT) "$(srcdir)/misc/PACKAGE")
+HELP2MAN		:= help2man
+DEPS			:= @@DEPS@@
+
+prefix      := @@PREFIX@@
+datarootdir := @@DATAROOTDIR@@
+datadir     := @@DATADIR@@
+exec_prefix := @@EXECPREFIX@@
+bindir      := @@BINDIR@@
+sbindir     := @@SBINDIR@@
+libexecdir  := @@LIBEXECDIR@@
+docdir		:= @@DOCDIR@@
+infodir     := @@INFODIR@@
+libdir      := @@LIBDIR@@
+mandir		:= @@MANDIR@@
+localedir	:= @@LOCALEDIR@@
+sysconfdir  := @@SYSCONFDIR@@
+
+all_SRCS     := $(wildcard $(srcdir)/src/*.c)
+all_HEADERS  := $(wildcard $(srcdir)/src/*.h)
+package_OBJS := $(addprefix $(objdir)/,$(notdir $(all_SRCS:.c=.o)))
+
+ifeq ($(DEPS),1)
+CPPFLAGS += -MMD -MP
+endif
+CPPFLAGS += -I$(objdir) -I$(srcdir)/src
+
+
+.PHONY: all
+all: $(objdir)/.d $(objdir)/$(PACKAGE) $(objdir)/$(PACKAGE).8
+
+$(objdir)/.d:
+	@mkdir -p $(objdir)/.d 2>/dev/null
+
+#$(objdir)/$(PACKAGE).8: $(objdir)/$(PACKAGE)
+#	$(HELP2MAN) -N -s 8 -S 'ZeroDay Linux' $< > $@
+
+$(objdir)/$(PACKAGE): $(package_OBJS)
+	$(CC) $(LDFLAGS) $(package_OBJS) -o $@
+
+
+.PHONY: install uninstall
+
+install: $(PACKAGE)
+	$(MKDIR) $(DESTDIR)$(bindir)
+	$(MKDIR) $(DESTDIR)$(mandir)/man8
+	$(CP) $(objdir)/$(PACKAGE) $(DESTDIR)$(bindir)/
+	$(CP) $(objdir)/$(PACKAGE).8 $(DESTDIR)$(mandir)/man8/
+
+uninstall:
+	$(RM) $(DESTDIR)$(bindir)/$(PACKAGE)
+	$(RM) $(DESTDIR)$(mandir)/man8/$(PACKAGE).8
+
+.PHONY: mostlyclean clean distclean maintainer-clean
+
+mostlyclean:
+	$(RM) $(package_OBJS) $(objdir)/$(PACKAGE)
+
+clean: mostlyclean
+#	$(RM) $(objdir)/$(PACKAGE).8
+
+distclean: clean
+	$(RM) config.log
+	$(RM) $(objdir)/config.h{,~} $(objdir)/Makefile
+	$(RM) -r $(objdir)/.d
+
+maintainer-clean: distclean
+	$(RM) $(PACKAGE)-$(VERSION).tar.xz
+
+
+.PHONY: dist
+
+dist:
+	pushd $(srcdir) >/dev/null ; \
+	$(TAR) -acf $(objdir)/$(PACKAGE)-$(VERSION).tar.xz \
+		--transform="s,^./,,;s,^,$(PACKAGE)-$(VERSION)/," \
+		README.md COPYING src misc Makefile.in configure ; \
+	popd >/dev/null
+
+$(objdir)/%.o: $(srcdir)/src/%.c
+ifeq ($(DEPS),1)
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) -MF $(objdir)/.d/$*.d $< -o $@
+else	
+	$(CC) -c $(CFLAGS) $(CPPFLAGS) $< -o $@
+endif
+
+ifeq ($(DEPS),1)
+-include $(all_SRCS:$(srcdir)/src/%.c=$(objdir)/.d/%.d)
+endif
+
