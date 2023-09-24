@@ -1,4 +1,5 @@
 #define _XOPEN_SOURCE 700
+
 #include "config.h"
 
 #include <stdlib.h>
@@ -18,7 +19,45 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <errno.h>
+
+
+
+#define LOG_NONE -2
+#define LOG_ALL -3
+
+#define TYPE_FILE 1
+#define TYPE_REMOTE 2
+#define TYPE_USER 3
+#define TYPE_OTHER 4
+
+
+
+static bool   opt_debug       = false;
+static bool   opt_forward     = false;
+static bool   opt_background  = true;
+static bool   opt_remote      = false;
+static int    opt_verbose     = 0;
+static bool   opt_rdns        = true;
+__attribute__((unused))
+static int    opt_num_sockets = 0; 
+static int    opt_interval    = 20;
+
+static const char  *opt_config      = NULL;
+static const char  *opt_hostlist    = NULL;
+static const char  *opt_domainlist  = NULL;
+static const char  *opt_mainsock    = NULL;
+
+__attribute__((unused))
+static       char *const*opt_sockets     = NULL;
+
+static regex_t main_line, comment_line;
+static int     log_fd;
+static bool    running;
+static time_t  last_mark;
+
+
 
 /* 
  * group 1: selector_list
@@ -26,17 +65,73 @@
  * group 3: comment (ignored)
  *
  */
-static const char main_line_re[]="^\\s*([0-9A-Za-z,!=*;.]+);?\\s+([-:*_0-9/@A-Za-z.]+)\\s*(#.*)?$";
-static const char comment_line_re[]="^\\s*#.*$";
+static const char main_line_re[]     = "^\\s*([0-9A-Za-z,!=*;.]+);?\\s+([-:*_0-9/@A-Za-z.]+)\\s*(#.*)?$";
+static const char comment_line_re[]  = "^\\s*#.*$";
+
+static const char default_mainsock[] = "/tmp/log";
+static const char default_config[]   = "syslogd.conf";
+
+static const struct { 
+    const char *const name; 
+    const int facility;
+} facility_names[] = {
+	{"auth"     , LOG_AUTH     },
+	{"authpriv" , LOG_AUTHPRIV },
+	{"cron"     , LOG_CRON     },
+	{"daemon"   , LOG_DAEMON   },
+	{"kern"     , LOG_KERN     },
+	{"lpr"      , LOG_LPR      },
+	{"mail"     , LOG_MAIL     },
+	{"news"     , LOG_NEWS     },
+	{"syslog"   , LOG_SYSLOG   },
+	{"user"     , LOG_USER     },
+	{"uucp"     , LOG_UUCP     },
+	{"local0"   , LOG_LOCAL0   },
+	{"local1"   , LOG_LOCAL1   },
+	{"local2"   , LOG_LOCAL2   },
+	{"local3"   , LOG_LOCAL3   },
+	{"local4"   , LOG_LOCAL4   },
+	{"local5"   , LOG_LOCAL5   },
+	{"local6"   , LOG_LOCAL6   },
+	{"local7"   , LOG_LOCAL7   },
+
+	{"*"        , LOG_ALL      },
+
+	{NULL       , -1           } 
+};
+
+static const struct { 
+    const char *const name; 
+    const int priority;
+} priority_names[] = {
+	{"debug"   , LOG_DEBUG   },
+	{"info"    , LOG_INFO    },
+	{"notice"  , LOG_NOTICE  },
+	{"warning" , LOG_WARNING },
+	{"err"     , LOG_ERR     },
+	{"crit"    , LOG_CRIT    },
+	{"alert"   , LOG_ALERT   },
+	{"emerg"   , LOG_EMERG   },
+	{"none"    , LOG_NONE    },
+
+	{"*"       , LOG_ALL     },
+
+	{NULL      , -1          } 
+};
+
+static const char *const target_type[] = {
+	[TYPE_FILE]   = "TYPE_FILE",
+	[TYPE_OTHER]  = "TYPE_OTHER",
+	[TYPE_REMOTE] = "TYPE_REMOTE",
+	[TYPE_USER]   = "TYPE_USER",
+};
+
+
 
 struct selector {
 	int facility;
 	int priority;
 };
-
-#define TYPE_FILE 1
-#define TYPE_REMOTE 2
-#define TYPE_USER 3
 
 struct entry {
 	struct entry *next;
@@ -56,12 +151,11 @@ struct entry {
 			int   protocol;
 		} remote;
 		char **user_list;
+		struct entry *other;
 	} target;
 
 	struct selector selectors[];
 };
-
-
 
 /* parsing:
  *
@@ -81,58 +175,16 @@ struct entry {
  * otherwise a user_list which can be split on "," with "*" being all users
  */
 
-#define LOG_NONE -2
-#define LOG_ALL -3
-
-static const struct { const char *name; int facility;} facility_names[] = {
-	{"auth",LOG_AUTH},
-	{"authpriv",LOG_AUTHPRIV},
-	{"cron",LOG_CRON},
-	{"daemon",LOG_DAEMON},
-	{"kern",LOG_KERN},
-	{"lpr",LOG_LPR},
-	{"mail",LOG_MAIL},
-	{"news",LOG_NEWS},
-	{"syslog",LOG_SYSLOG},
-	{"user",LOG_USER},
-	{"uucp",LOG_UUCP},
-	{"local0",LOG_LOCAL0},
-	{"local1",LOG_LOCAL1},
-	{"local2",LOG_LOCAL2},
-	{"local3",LOG_LOCAL3},
-	{"local4",LOG_LOCAL4},
-	{"local5",LOG_LOCAL5},
-	{"local6",LOG_LOCAL6},
-	{"local7",LOG_LOCAL7},
-	{"*",LOG_ALL},
-	{NULL, -1}
-};
-
-static const struct { const char *name; int priority;} priority_names[] = {
-    {"debug",LOG_DEBUG},
-    {"info",LOG_INFO},
-    {"notice",LOG_NOTICE},
-    {"warning",LOG_WARNING},
-    {"err",LOG_ERR},
-    {"crit",LOG_CRIT},
-    {"alert",LOG_ALERT},
-    {"emerg",LOG_EMERG},
-	{"none",LOG_NONE},
-	{"*",LOG_ALL},
-    {NULL,-1}
-};
-
+__attribute__((nonnull))
 static void trim(char *str)
 {
 	int pos = strlen(str) - 1;
 
 	while (pos && isspace(str[pos]))
-			str[pos--] = '\0';
+		str[pos--] = '\0';
 }
 
-static regex_t main_line, comment_line;
-static int log_fd;
-
+__attribute__((nonnull))
 static int lookup_fac(const char *txt)
 {
 	for (int i = 0; facility_names[i].name; i++)
@@ -142,6 +194,7 @@ static int lookup_fac(const char *txt)
 	return -1;
 }
 
+__attribute__((nonnull))
 static int lookup_pri(const char *txt)
 {
 	for (int i = 0; priority_names[i].name; i++)
@@ -151,6 +204,7 @@ static int lookup_pri(const char *txt)
 	return -1;
 }
 
+__attribute__((nonnull))
 static void free_entries(struct entry *entries)
 {
 	for(struct entry *next, *tmp = entries; tmp;)
@@ -158,19 +212,19 @@ static void free_entries(struct entry *entries)
 		next = tmp->next;
 
 		/*
-		printf("free entry: [");
-		for (int i = 0; i < tmp->num_sel; i++)
-			printf("%08x.%08x%s",
-					tmp->selectors[i].facility,
-					tmp->selectors[i].priority,
-					i + 1 == tmp->num_sel ? "" : ",");
-		printf("] =>");
+		   printf("free entry: [");
+		   for (int i = 0; i < tmp->num_sel; i++)
+		   printf("%08x.%08x%s",
+		   tmp->selectors[i].facility,
+		   tmp->selectors[i].priority,
+		   i + 1 == tmp->num_sel ? "" : ",");
+		   printf("] =>");
 
-		switch (tmp->type) {
-			case TYPE_FILE: puts(tmp->target.file); break;
-			case TYPE_REMOTE: puts(tmp->target.remote); break;
-		}
-		*/
+		   switch (tmp->type) {
+		   case TYPE_FILE: puts(tmp->target.file); break;
+		   case TYPE_REMOTE: puts(tmp->target.remote); break;
+		   }
+		   */
 
 		switch (tmp->type)
 		{
@@ -182,6 +236,9 @@ static void free_entries(struct entry *entries)
 				break;
 			case TYPE_USER:
 				/* TODO */
+				break;
+			case TYPE_OTHER:
+				tmp->target.other = NULL;
 				break;
 			default:
 				errx(EXIT_FAILURE, "unknown TYPE %d", tmp->type);
@@ -202,8 +259,20 @@ static void clean_log_fd(void)
 {
 	if (log_fd != -1) {
 		close(log_fd);
-		unlink("/tmp/log");
+		unlink(opt_mainsock);
 		log_fd = -1;
+	}
+}
+
+static void sig_sigalrm(int sig, siginfo_t *info __attribute__((unused)), void *ucontext __attribute__((unused)))
+{
+	if (sig == SIGALRM) {
+		if (opt_interval) {
+			last_mark = time(NULL);
+			alarm(opt_interval * 60);
+		} else {
+			/* ??? */
+		}
 	}
 }
 
@@ -215,37 +284,34 @@ static void sig_sigchld(int sig, siginfo_t *info, void *ucontext __attribute__((
 		waitpid(info->si_pid, &wstatus, WNOHANG);
 }
 
+static void sig_sigint(int sig, siginfo_t *info __attribute__((unused)), void *ucontext __attribute__((unused)))
+{
+	if (sig == SIGINT)
+		running = false;
+}
+
 static void setup_signals(void)
 {
 	sigset_t set, oldset;
 
 	sigfillset(&set);
-	sigdelset(&set, SIGTERM);
+	sigdelset(&set, SIGALRM);
 	sigdelset(&set, SIGINT);
 	sigdelset(&set, SIGQUIT);
-	sigdelset(&set, SIGUSR1);
 	sigdelset(&set, SIGTERM);
+	sigdelset(&set, SIGTERM);
+	sigdelset(&set, SIGUSR1);
 
 	if (sigprocmask(SIG_BLOCK, &set, &oldset) == -1)
 		warn("sigprocmask");
 
 	const struct sigaction sigactions[] = {
-		[SIGTERM] = {
-			.sa_handler = SIG_DFL
-		},
-		[SIGINT] = {
-			.sa_handler = SIG_DFL
-		},
-		[SIGQUIT] = {
-			.sa_handler = SIG_DFL
-		},
-		[SIGUSR1] = {
-			.sa_handler = SIG_DFL
-		},
-		[SIGCHLD] = {
-			.sa_sigaction = sig_sigchld,
-			.sa_flags     = SA_SIGINFO
-		}
+		[SIGALRM] = { .sa_sigaction = sig_sigalrm, .sa_flags = SA_SIGINFO },
+		[SIGCHLD] = { .sa_sigaction = sig_sigchld, .sa_flags = SA_SIGINFO },
+		[SIGINT]  = { .sa_sigaction = sig_sigint,  .sa_flags = SA_SIGINFO },
+		[SIGQUIT] = { .sa_handler   = SIG_DFL                             },
+		[SIGTERM] = { .sa_handler   = SIG_DFL                             },
+		[SIGUSR1] = { .sa_handler   = SIG_DFL                             },
 	};
 
 	const int sigactions_size = sizeof(sigactions) / sizeof(struct sigaction);
@@ -266,7 +332,7 @@ static void setup_socket()
 
 	memset(&sun_log, 0, sizeof(sun_log));
 	sun_log.sun_family = AF_UNIX;
-	strcpy(sun_log.sun_path, "/tmp/log");
+	strcpy(sun_log.sun_path, opt_mainsock);
 	unlink(sun_log.sun_path);
 
 	atexit(clean_log_fd);
@@ -277,14 +343,17 @@ static void setup_socket()
 	if (bind(log_fd, (const struct sockaddr *)&sun_log, sizeof(sun_log)) == -1)
 		err(EXIT_FAILURE, "bind");
 
-	chmod("/tmp/log", 0666);
+	chmod(sun_log.sun_path, 0666);
 }
 
-struct entry *find_match(struct entry *entries, int fac, int pri, bool any)
+__attribute__((nonnull))
+static struct entry *find_match(struct entry *entries, int fac, int pri, bool any __attribute__((unused)))
 {
 	struct entry *ent;
 
 	ent = entries;
+
+	if (opt_debug) printf("DEBUG: find_match(%p)\n", entries);
 
 	while (ent)
 	{
@@ -295,7 +364,7 @@ struct entry *find_match(struct entry *entries, int fac, int pri, bool any)
 		{
 			sel = &ent->selectors[i];
 
-			printf("comparing %08x.%08x[%08x] with %08x.%08x\n", 
+			if (opt_debug) printf("DEBUG: find_match: comparing %08x.%08x[%08x] with %08x.%08x\n", 
 					pri, fac, (1 << fac),
 					sel->priority, sel->facility);
 
@@ -305,8 +374,6 @@ struct entry *find_match(struct entry *entries, int fac, int pri, bool any)
 				continue;
 
 			found = true;
-
-			printf("found\n");
 
 			/* TODO check this logic works for 'any' and 'none' */
 		}
@@ -320,12 +387,16 @@ struct entry *find_match(struct entry *entries, int fac, int pri, bool any)
 	return NULL;
 }
 
+__attribute__((nonnull))
 static void process_record(struct entry *entries, char *string)
 {
 	char *ptr;
 	int   facility, priority;
+	bool  need_date;
 
 	struct entry *match, *start;
+
+	if (opt_debug) printf("DEBUG: process_record(%p, <%s>)\n", entries, string);
 
 	ptr      = string;
 	facility = LOG_USER;
@@ -356,87 +427,107 @@ static void process_record(struct entry *entries, char *string)
 			return;
 
 		start = match->next;
+		need_date = false;
 
-		printf("got fac=%d pri=%d m=<%s> target=<%s>\n", facility, priority, ptr, match->target.file.name);
-	} while(match);
+		/* mmm dd HH:MM:SS .+: */
+		if (!(ptr[3] == ' ' && ptr[6] == ' ' && ptr[9] == ':' && ptr[12] == ':' && ptr[15] == ' '))
+			need_date = true;
+
+		if (opt_debug) printf("DEBUG: process_record: fac=%d pri=%d m=<%s> need_date=%s target=[%s]<%s>\n", 
+				facility, priority, ptr,
+				need_date ? "true" : "false",
+				target_type[match->type],
+				match->target.file.name);
+	} while(match && start);
 }
 
-#define MAX_FDS
-
-	__attribute__((nonnull))
+__attribute__((nonnull))
 static void daemon(struct entry *entries, int pipe_fd)
 {
 	pid_t child;
 	char  buf;
-	bool  running;
 	FILE *pid_file;
 
-	setsid();
+	if (opt_background) {
 
-	if ((child = fork()) > 0) {
-		free_entries(entries);
-		exit(EXIT_SUCCESS);
-	} else if (child == -1) {
-		err(EXIT_FAILURE, "fork2");
+		setsid();
+
+		if ((child = fork()) > 0) {
+			free_entries(entries);
+			exit(EXIT_SUCCESS);
+		} else if (child == -1) {
+			err(EXIT_FAILURE, "fork2");
+		}
+
+		/* real child from here */
+
+		fclose(stdout);
+		fclose(stdin);
+		fclose(stderr);
+
+		close(STDIN_FILENO);
+		close(STDOUT_FILENO);
+		close(STDERR_FILENO);
+
+
+		open("/dev/null", O_RDONLY);
+		/*
+		   open("/dev/null", O_WRONLY);
+		   open("/dev/null", O_WRONLY);
+		   */
+		open("/tmp/syslog.log", O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR);
+		open("/tmp/syslog.log", O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR);
+
+		stdout = fdopen(STDOUT_FILENO, "a");
+		stderr = fdopen(STDERR_FILENO, "a");
+
+		setvbuf(stdout, NULL, _IONBF, 0);
+		setvbuf(stderr, NULL, _IONBF, 0);
+
+		umask(0022);
+		chdir("/");
+
+		atexit(clean_pid);
+
+		if ((pid_file = fopen("/tmp/syslog.pid","w")) != NULL) {
+			fprintf(pid_file, "%d", getpid());
+			fclose(pid_file);
+		} else
+			warn("fopen: syslog.pid");
+
+		buf = 'X';
+		if (write(pipe_fd, &buf, 1) == -1)
+			err(EXIT_FAILURE, "write: pipe");
+		close(pipe_fd);
 	}
-
-	/* real child from here */
-
-	fclose(stdout);
-	fclose(stdin);
-	fclose(stderr);
-
-	close(STDIN_FILENO);
-	close(STDOUT_FILENO);
-	close(STDERR_FILENO);
-
-	
-	open("/dev/null", O_RDONLY);
-	/*
-	open("/dev/null", O_WRONLY);
-	open("/dev/null", O_WRONLY);
-	*/
-	open("/tmp/syslog.log", O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR);
-	open("/tmp/syslog.log", O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR);
-
-	stdout = fdopen(STDOUT_FILENO, "a");
-	stderr = fdopen(STDERR_FILENO, "a");
-
-	setvbuf(stdout, NULL, _IONBF, 0);
-	setvbuf(stderr, NULL, _IONBF, 0);
-
-	umask(0022);
-	chdir("/");
-
-	atexit(clean_pid);
-
-	if ((pid_file = fopen("/tmp/syslog.pid","w")) != NULL) {
-		fprintf(pid_file, "%d", getpid());
-		fclose(pid_file);
-	} else
-		warn("fopen: syslog.pid");
-
-	buf = 'X';
-	if (write(pipe_fd, &buf, 1) == -1)
-		err(EXIT_FAILURE, "write: pipe");
-	close(pipe_fd);
 
 	/* daemon set-up successfully from here */
 
+	if (opt_debug) printf("DEBUG: daemon: setting up signals\n");
 	setup_signals();
+	if (opt_debug) printf("DEBUG: daemon: setting up socket\n");
 	setup_socket();
 
+	if (opt_debug) printf("DEBUG: daemon: entering main loop\n");
 	running = true;
+
+	last_mark = time(NULL);
+	if (opt_interval)
+		alarm((opt_interval * 60));
+
 	while (running)
 	{
 		char buf[BUFSIZ];
 		int rc;
 
 		errno = 0;
+		memset(buf, 0, sizeof(buf));
 
 		rc = read(log_fd, buf, sizeof(buf) - 1);
 
 		if (rc == -1) {
+			if (errno == EINTR)
+				continue;
 			warn("read");
 			running = false;
 			continue;
@@ -445,20 +536,21 @@ static void daemon(struct entry *entries, int pipe_fd)
 			continue;
 		}
 
-		process_record(entries, buf);
-
 		rc--;
 
-		while(rc && buf[rc] == '\0' || buf[rc] == '\n') rc--;
-		buf[++rc] = '\n';
+		while(rc && (buf[rc] == '\0' || buf[rc] == '\n')) rc--;
+		buf[++rc] = '\0';
 
+		process_record(entries, buf);
 
 		running = false;
 	}
 
-	free_entries(entries);
 
-	exit(EXIT_SUCCESS);
+	if (opt_background) {
+		free_entries(entries);
+		exit(EXIT_SUCCESS);
+	}
 }
 
 
@@ -540,7 +632,7 @@ static struct entry *process_line(char *one, const char *two)
 
 		/* process facilities_list */
 		fac_list = strtok(selectors[i], ".");
-		
+
 		if (fac_list == NULL) {
 			/* should never happen? */
 			warnx("invalid selector: <%s>", selectors[i]);
@@ -566,14 +658,14 @@ static struct entry *process_line(char *one, const char *two)
 			tmp = strtok(fac_list, ",");
 
 			if (!tmp) /* TODO: is this an error/can it even occur? */
-			do {
-				int tmp_fac = lookup_fac(tmp);
-				if (tmp_fac == -1) {
-					warnx("invalid facility: <%s>", tmp);
-					goto skip;
-				}
-				fac |= (1 << tmp_fac);
-			} while( (tmp = strtok(NULL, ",")) != NULL );
+				do {
+					int tmp_fac = lookup_fac(tmp);
+					if (tmp_fac == -1) {
+						warnx("invalid facility: <%s>", tmp);
+						goto skip;
+					}
+					fac |= (1 << tmp_fac);
+				} while( (tmp = strtok(NULL, ",")) != NULL );
 
 		} else { /* TODO: can the non , list case be merged ? */
 			fac = lookup_fac(fac_list);
@@ -625,7 +717,7 @@ static struct entry *process_line(char *one, const char *two)
 
 		if (pri_negate)
 			priority = ~priority;
-			
+
 		/* store priority and facility */
 		ent->selectors[i].priority = priority;
 		ent->selectors[i].facility = fac;
@@ -636,12 +728,13 @@ skip:
 	return ent;
 }
 
+__attribute__((nonnull))
 static struct entry *parse_config(FILE *fp)
 {
 	char   linebuf[BUFSIZ];
 	char  *bufptr = linebuf;
 	size_t bufsiz;
-	
+
 	struct entry *ret = NULL;
 
 	bufsiz = sizeof(linebuf) - 1;
@@ -713,9 +806,106 @@ reset:
 	return ret;
 }
 
+/* consolidate duplicate targets to single instances */
+__attribute__((nonnull))
+static void check_dupes(struct entry *ents)
+{
+	struct entry *cur;
+
+	cur = ents;
+
+	while (cur)
+	{
+		if (cur->type == TYPE_OTHER)
+			goto skip;
+
+		for (struct entry *tmp = cur->next; tmp; tmp = tmp->next)
+		{
+			if (tmp->type != cur->type)
+				continue;
+
+			switch (tmp->type)
+			{
+				case TYPE_FILE:
+					if (strcmp(cur->target.file.name, tmp->target.file.name))
+						continue;
+					break;
+				case TYPE_OTHER:
+					continue;
+				case TYPE_USER:
+					/* TODO */
+					continue;
+				case TYPE_REMOTE:
+					if (cur->target.remote.protocol != tmp->target.remote.protocol)
+						continue;
+					if (strcmp(cur->target.remote.name, tmp->target.remote.name))
+						continue;
+					break;
+				default:
+					warn("unknown TYPE in check_dupes");
+					continue;
+			}
+
+			if (opt_debug) printf("DEBUG: check_dupes: de-duplicating\n");
+
+			/* must have a match */
+			tmp->type = TYPE_OTHER;
+			tmp->target.other = cur;
+		}
+skip:
+		cur = cur->next;
+	}
+}
+
+static void show_version(void)
+{
+	fprintf(stderr, "syslogd version " VERSION "\n");
+}
+
+static void show_usage(void)
+{
+	show_version();
+	fprintf(stderr, "Usage: syslogd [-dhnrSvx] [-a socket] [-f config_file] [-l hostlist] [-m interval] [-p socket] [-s domainlist]");
+	exit(EXIT_FAILURE);
+}
 
 int main(int argc, char *argv[])
 {
+	opt_mainsock = default_mainsock;
+	opt_config   = default_config;
+
+	{
+		int opt;
+		while ((opt = getopt(argc, argv, "dhnrSvxa:f:l:m:p:s:")) != -1)
+		{
+			switch (opt)
+			{
+				case 'd': opt_debug = true;       
+						  /* fall-through */
+				case 'n': opt_background = false; break;
+				case 'h': opt_forward = true;     break;
+				case 'r': opt_remote = true;      break;
+				case 'S': opt_verbose++;          break;
+				case 'x': opt_rdns = false;       break;
+
+				case 'a': {
+						  }
+						  break;
+				case 'f': opt_config = optarg;         break;
+				case 'l': opt_hostlist = optarg;       break;
+				case 'm': opt_interval = atoi(optarg); break;
+				case 's': opt_domainlist = optarg;     break;
+				case 'p': opt_mainsock = optarg;       break;
+
+				case 'v':
+						  show_version();
+						  exit(EXIT_SUCCESS);
+				default:
+						  show_usage();
+			}
+		}
+	}
+
 	int   rc;
 	int   filedes[2];
 	char  buf;
@@ -735,33 +925,49 @@ int main(int argc, char *argv[])
 		errx(EXIT_FAILURE, "regcomp: comment_line: %s", errbuf);
 	}
 
-	if ((conf = fopen("syslog.conf", "r")) == NULL)
-		err(EXIT_FAILURE, "fopen: syslog.conf");
+	if (opt_debug) printf("DEBUG: main: opening config file <%s>\n", opt_config);
+
+	if ((conf = fopen(opt_config, "r")) == NULL)
+		err(EXIT_FAILURE, "fopen: %s", opt_config);
 
 	if ((entries = parse_config(conf)) == NULL)
 		exit(EXIT_FAILURE);
 
+	if (opt_debug) printf("DEBUG: main: checking for duplicate targets\n");
+	check_dupes(entries);
+
 	fclose(conf);
 	regfree(&main_line);
 	regfree(&comment_line);
-	
-	if (pipe(filedes) == -1)
-		err(EXIT_FAILURE, "pipe");
 
-	if ((child = fork()) == 0) {
-		close(filedes[0]);
-		daemon(entries, filedes[1]);
+	if (opt_background) {
+		if (opt_debug) printf("DEBUG: main: running in background\n");
+		if (pipe(filedes) == -1)
+			err(EXIT_FAILURE, "pipe");
+
+		if ((child = fork()) == 0) {
+			close(filedes[0]);
+			daemon(entries, filedes[1]);
+		}
+
+		if (child == -1)
+			err(EXIT_FAILURE, "fork");
+
+		close(filedes[1]);
+	} else {
+		if (opt_debug) printf("DEBUG: main: running in foreground\n");
+		daemon(entries, 0);
 	}
-
-	if (child == -1)
-		err(EXIT_FAILURE, "fork");
-
-	close(filedes[1]);
 	free_entries(entries);
 
-	if ((read(filedes[0], &buf, 1)) == -1)
-		err(EXIT_FAILURE, "read: pipe");
+	if (opt_background) {
+		if ((read(filedes[0], &buf, 1)) == -1)
+			err(EXIT_FAILURE, "read: pipe");
 
-	close(filedes[0]);
+		close(filedes[0]);
+	}
+
+	if (opt_debug) printf("DEBUG: main: exiting\n");
+
 	exit(EXIT_SUCCESS);
 }
