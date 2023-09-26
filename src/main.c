@@ -175,6 +175,42 @@ struct entry {
  * otherwise a user_list which can be split on "," with "*" being all users
  */
 
+static void send_log(struct entry *ent, const char *message, int fac, int pri)
+{
+	int rc;
+
+	switch (ent->type)
+	{
+		case TYPE_USER:
+			break;
+		case TYPE_FILE:
+			if (ent->target.file.fd == -1) {
+				if ((ent->target.file.fd = open(ent->target.file.name, O_WRONLY|O_APPEND|O_CREAT|O_NOCTTY, S_IWUSR|S_IRUSR)) == -1) {
+					warn("send_log: open: <%s>:", ent->target.file.name);
+					return;
+				}
+			}
+
+			if ((rc = write(ent->target.file.fd, message, strlen(message))) == -1) {
+				warn("send_log: write: <%s>:", ent->target.file.name);
+				close(ent->target.file.fd);
+				ent->target.file.fd = -1;
+				return;
+			}
+
+			if (ent->sync)
+				fdatasync(ent->target.file.fd);
+				
+			break;
+		case TYPE_OTHER:
+			return send_log(ent->target.other, message, fac, pri);
+		case TYPE_REMOTE:
+			break;
+		default:
+			warnx("send_log: unknown TYPE");
+	}
+}
+
 __attribute__((nonnull))
 static void trim(char *str)
 {
@@ -210,21 +246,6 @@ static void free_entries(struct entry *entries)
 	for(struct entry *next, *tmp = entries; tmp;)
 	{
 		next = tmp->next;
-
-		/*
-		   printf("free entry: [");
-		   for (int i = 0; i < tmp->num_sel; i++)
-		   printf("%08x.%08x%s",
-		   tmp->selectors[i].facility,
-		   tmp->selectors[i].priority,
-		   i + 1 == tmp->num_sel ? "" : ",");
-		   printf("] =>");
-
-		   switch (tmp->type) {
-		   case TYPE_FILE: puts(tmp->target.file); break;
-		   case TYPE_REMOTE: puts(tmp->target.remote); break;
-		   }
-		   */
 
 		switch (tmp->type)
 		{
@@ -421,6 +442,8 @@ static void process_record(struct entry *entries, char *string)
 
 	start = entries;
 
+	strcat(ptr, "\n");
+
 	do {
 		if ( (match = find_match(start, facility, priority, false)) == NULL &&
 				(match = find_match(start, facility, priority, true)) == NULL )
@@ -437,7 +460,11 @@ static void process_record(struct entry *entries, char *string)
 				facility, priority, ptr,
 				need_date ? "true" : "false",
 				target_type[match->type],
-				match->target.file.name);
+				(match->type == TYPE_FILE) ? match->target.file.name : "");
+
+
+		send_log(match, ptr, facility, priority);
+
 	} while(match && start);
 }
 
@@ -933,10 +960,11 @@ int main(int argc, char *argv[])
 	if ((entries = parse_config(conf)) == NULL)
 		exit(EXIT_FAILURE);
 
+	fclose(conf);
+
 	if (opt_debug) printf("DEBUG: main: checking for duplicate targets\n");
 	check_dupes(entries);
 
-	fclose(conf);
 	regfree(&main_line);
 	regfree(&comment_line);
 
@@ -958,6 +986,7 @@ int main(int argc, char *argv[])
 		if (opt_debug) printf("DEBUG: main: running in foreground\n");
 		daemon(entries, 0);
 	}
+
 	free_entries(entries);
 
 	if (opt_background) {
