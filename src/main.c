@@ -26,6 +26,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/time.h>
+#include <limits.h>
 
 
 
@@ -58,15 +59,19 @@ struct selector {
 
 struct record {
 	format_t type;
-    int version;
-    struct timeval tv;
-    char *hostname;
+
+	int   version;
+	char *hostname;
     char *appname;
     char *procid;
     char *msgid;
     char *msg;
-	int facility;
-	int priority;
+	int   facility;
+	int   priority;
+	char *sender;
+	
+	struct in_addr src_ip;
+    struct timeval tv;
     /* TODO data */
 };
 
@@ -616,12 +621,18 @@ static struct entry *find_match(struct entry *entries, int fac, int pri, bool an
 	return NULL;
 }
 
-__attribute__((nonnull))
-static void process_record(struct entry *entries, char *string, format_t format)
+__attribute__((nonnull(1,2,4)))
+static void process_record(
+		struct entry *entries,
+		char         *string,
+		format_t      format,
+		const char   *sender,
+		const void   *proto_specific,
+		       int    family)
 {
 	char  *ptr;
-	int    facility, priority;
-	time_t now;
+	int    facility, priority, rc;
+	time_t now, event;
 	char   hostname[64 + 1];
 
 	struct entry *match, *start;
@@ -662,13 +673,18 @@ static void process_record(struct entry *entries, char *string, format_t format)
 
 	record->facility = facility;
 	record->priority = priority;
+	record->sender   = strdup(sender);
+
+	if (family == AF_INET && proto_specific)
+		record->src_ip = *(struct in_addr *)proto_specific;
+	else
+		record->src_ip.s_addr = 0;
 
     /* mmm dd HH:MM:SS (.+:)? .* */
     if (format != TYPE_RFC5424) {
 		/* TODO confirm LOCAL vs RFC3542 */
 		record->type = TYPE_RFC3164;
 
-		time_t  event;
 		char   *tmp;
 
         if (!(ptr[3] == ' ' && ptr[6] == ' ' && ptr[9] == ':' 
@@ -691,7 +707,6 @@ static void process_record(struct entry *entries, char *string, format_t format)
 		}
 
 		char *appname, *pid;
-		int   rc;
 		char  dummy1, dummy2;
 
 		appname = NULL;
@@ -741,14 +756,28 @@ static void process_record(struct entry *entries, char *string, format_t format)
 
 		char       tmp[BUFSIZ];
 		regmatch_t pmatch[12];
+		long       version;
+		char      *endptr;
 
 		if ((tok = strtok(ptr, " ")) == NULL) 
 			goto bad_fmt;
 
-		record->version = atoi(tok);
+		errno = 0;
+		version = strtol(tok, &endptr, 10);
 
-		if (record->version != 1)
+		if ( (version == 0 && endptr == tok) ||
+				(version == LONG_MIN && errno == ERANGE) ||
+				(version == LONG_MAX && errno == ERANGE) ) {
+			warnx("process_record: HEADER.VERSION is not a number");
 			goto bad_fmt;
+		}
+
+		if (version != 1L) {
+			warnx("process_record: HEADER.VERSION invalid: <%ld>", version);
+			goto bad_fmt;
+		}
+
+		record->version = version;
 
 		if ((tok = strtok(NULL, " ")) == NULL) 
 			goto bad_fmt;
@@ -772,12 +801,12 @@ static void process_record(struct entry *entries, char *string, format_t format)
 			tm.tm_year -= 1900;
 			tm.tm_mon -= 1;
 
-			time_t event = mktime(&tm);
+			event = mktime(&tm);
 
 			if (pmatch[10].rm_so && pmatch[10].rm_eo) {
 				int len =  pmatch[10].rm_eo - pmatch[10].rm_so;
 				char c;
-				int hr,min;
+				int hr, min;
 
 				strncpy(tmp, date + pmatch[10].rm_so, len);
 				sscanf(tmp, "%c%02u:%02u", &c, &hr, &min); /* TODO error */
@@ -853,24 +882,24 @@ static void process_record(struct entry *entries, char *string, format_t format)
     }
 
 	/* send the now well-formed record to all targets */
-    for (start = entries; match && start; start = match->next) 
+	start = entries;
+	do
 	{
         if ((match = find_match(start, facility, priority, false)) == NULL
-                /* TODO && (match = find_match(start, facility, priority, true)) == NULL */
+			/* TODO && (match = find_match(start, facility, priority, true)) == NULL */
            )
             return;
-
-        //start = match->next;
 
         if (opt_debug) 
             printf("DEBUG: process_record: target=[%s]<%s>\n", 
                     target_type[match->type],
                     (match->type == TYPE_FILE) ? match->target.file.name : "");
 
+		start = match->next;
 
 		/* TODO check record.msg is set! */
         send_log(match, record);
-    }
+    } while(match && start);
 
 	if (record)
 		free_record(record);
@@ -938,21 +967,21 @@ static void main_loop(struct entry *entries)
         /* check each socket */
         for (int i = 0; i < num_fds; i++)
         {
-            socklen_t sa_len;
+            socklen_t sin_len;
             socklen_t so_type_len;
             int       so_type;
 
-            struct sockaddr_in sa;
+            struct sockaddr_in sa_in;
 
             if (fds[i] == -1)
                 continue;
 
             /* determine the socket type */
 
-            sa_len = sizeof(sa);
+            sin_len = sizeof(sa_in);
             so_type_len = sizeof(so_type);
 
-            if (getsockname(fds[i], (struct sockaddr *)&sa, &sa_len) == -1)
+            if (getsockname(fds[i], (struct sockaddr *)&sa_in, &sin_len) == -1)
                 err(EXIT_FAILURE, "main_loop: getsockname");
 
             if (getsockopt(fds[i], SOL_SOCKET, SO_TYPE, &so_type, &so_type_len) == -1)
@@ -965,19 +994,32 @@ static void main_loop(struct entry *entries)
 
             if (FD_ISSET(fds[i], &input_fd)) {
                 const char *name;
-                format_t format;
+				const void *proto_specific;
+                format_t    format;
+				int         family;
 
-                if (sa.sin_family == AF_INET && so_type == SOCK_DGRAM) {
-                    sa_len = sizeof(sa);
+				name = NULL;
+				proto_specific = NULL;
+				family = sa_in.sin_family;
+
+                if (family == AF_INET && so_type == SOCK_DGRAM) {
+                    sin_len = sizeof(sa_in);
 
                     rc = recvfrom(remote_fd, buf, sizeof(buf) - 1, 0, 
-                            (struct sockaddr *)&sa, &sa_len);
-                    name = inet_ntoa(sa.sin_addr);
+                            (struct sockaddr *)&sa_in, &sin_len);
+
                     format = TYPE_RFC5424;
-                } else if (sa.sin_family == AF_UNIX && so_type == SOCK_DGRAM) {
+
+					if (rc != -1) {
+						name           = inet_ntoa(sa_in.sin_addr);
+						proto_specific = &sa_in.sin_addr;
+					}
+                } else if (family == AF_UNIX && so_type == SOCK_DGRAM) {
                     rc = read(log_fd, buf, sizeof(buf) - 1);
-                    name = "-";
-                    format = TYPE_LOCAL;
+                    format         = TYPE_LOCAL;
+
+                    name           = "-";
+					proto_specific = NULL;
                 } else {
                     /* TODO should this error? */
                     name = "UNKNOWN";
@@ -1005,7 +1047,7 @@ static void main_loop(struct entry *entries)
 
                 buf[++rc] = '\0';
 
-                process_record(entries, buf, format);
+                process_record(entries, buf, format, name, proto_specific, family);
             }
         }
 
