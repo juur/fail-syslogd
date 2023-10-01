@@ -589,8 +589,6 @@ static struct entry *find_match(struct entry *entries, int fac, int pri, bool an
 
 	ent = entries;
 
-	//if (opt_debug) printf("DEBUG: find_match(%p)\n", entries);
-
 	while (ent)
 	{
 		found = false;
@@ -655,11 +653,9 @@ static void process_record(struct entry *entries, char *string, format_t format)
 		if (*ptr) 
 			ptr++;
 	} else {
-        warnx("process_record: malformed line: <%s>", string);
+        warnx("process_record: malformed line (HEADER.PRI): <%s>", string);
 		goto bad_fmt;
 	}
-
-	start = entries;
 
 	if ((record = calloc(1, sizeof(struct record))) == NULL)
 		err(EXIT_FAILURE, "process_record: calloc(record)");
@@ -667,7 +663,7 @@ static void process_record(struct entry *entries, char *string, format_t format)
 	record->facility = facility;
 	record->priority = priority;
 
-    /* mmm dd HH:MM:SS .+: */
+    /* mmm dd HH:MM:SS (.+:)? .* */
     if (format != TYPE_RFC5424) {
 		/* TODO confirm LOCAL vs RFC3542 */
 		record->type = TYPE_RFC3164;
@@ -796,16 +792,12 @@ static void process_record(struct entry *entries, char *string, format_t format)
 			record->tv.tv_sec = event;
 			record->tv.tv_usec = ms;
 
-			printf("date=<%s> => event=%lu.%06lu\n", 
-					date, 
-                    record->tv.tv_sec, 
-                    record->tv.tv_usec);
-
 			free(date);
         } else {
-            printf("regexec failed <%s>\n", date);
+            warnx("process_record: HEADER.TIMESTAMP: regexec failed date=<%s>\n", date);
 			free(date);
-			/* TODO barf */
+
+			goto bad_fmt;
 		}
 
         if ((tok = strtok(NULL, " ")) == NULL) 
@@ -836,6 +828,7 @@ static void process_record(struct entry *entries, char *string, format_t format)
 			if ((record->msgid = strdup(tok)) == NULL)
 				err(EXIT_FAILURE, "process_record: strdup(msgid)");
 
+		/* TODO handle the case STRUCTURED-DATA is "-" */
 		if ((tok = strtok(NULL, "]")) == NULL) 
 			goto bad_fmt;
         if (*(tok++) != '[') 
@@ -843,6 +836,9 @@ static void process_record(struct entry *entries, char *string, format_t format)
 
         if ((data = strdup(tok)) == NULL)
 			err(EXIT_FAILURE, "process_record: strdup(data)");
+
+		/* TODO process STRUCTURED-DATA */
+
         free(data);
 
         if ((tok = strtok(NULL, "\0")) != NULL && *tok != '\0') {
@@ -856,13 +852,15 @@ static void process_record(struct entry *entries, char *string, format_t format)
 
     }
 
-    do {
+	/* send the now well-formed record to all targets */
+    for (start = entries; match && start; start = match->next) 
+	{
         if ((match = find_match(start, facility, priority, false)) == NULL
                 /* TODO && (match = find_match(start, facility, priority, true)) == NULL */
            )
             return;
 
-        start = match->next;
+        //start = match->next;
 
         if (opt_debug) 
             printf("DEBUG: process_record: target=[%s]<%s>\n", 
@@ -872,17 +870,19 @@ static void process_record(struct entry *entries, char *string, format_t format)
 
 		/* TODO check record.msg is set! */
         send_log(match, record);
-
-    } while(match && start);
+    }
 
 	if (record)
 		free_record(record);
+
     return;
 
 bad_fmt:
-    errx(EXIT_FAILURE, "process_record: bad format");
+    warnx("process_record: bad format in record");
+
 	if (record)
 		free_record(record);
+
     return;
 }
 
@@ -1006,8 +1006,6 @@ static void main_loop(struct entry *entries)
                 buf[++rc] = '\0';
 
                 process_record(entries, buf, format);
-        running = false;
-
             }
         }
 
@@ -1428,7 +1426,7 @@ skip:
 
 static void show_version(void)
 {
-	fprintf(stderr, "syslogd version " VERSION "\n");
+	fprintf(stderr, "fail-syslogd version " VERSION "\n");
 }
 
 static void show_usage(void)
@@ -1502,10 +1500,10 @@ int main(int argc, char *argv[])
 	if (opt_debug) printf("DEBUG: main: opening config file <%s>\n", opt_config);
 
 	if ((conf = fopen(opt_config, "r")) == NULL)
-		err(EXIT_FAILURE, "fopen: %s", opt_config);
+		err(EXIT_FAILURE, "main: fopen: <%s>", opt_config);
 
 	if ((entries = parse_config(conf)) == NULL)
-		exit(EXIT_FAILURE);
+		errx(EXIT_FAILURE, "unable to parse config, or config is empty");
 
 	fclose(conf);
 
@@ -1514,12 +1512,11 @@ int main(int argc, char *argv[])
 
 	regfree(&main_line);
 	regfree(&comment_line);
-	regfree(&rfc5242_tz);
 
 	if (opt_background) {
 		if (opt_debug) printf("DEBUG: main: running in background\n");
 		if (pipe(filedes) == -1)
-			err(EXIT_FAILURE, "pipe");
+			err(EXIT_FAILURE, "main: pipe");
 
 		if ((child = fork()) == 0) {
 			close(filedes[0]);
@@ -1527,7 +1524,7 @@ int main(int argc, char *argv[])
 		}
 
 		if (child == -1)
-			err(EXIT_FAILURE, "fork");
+			err(EXIT_FAILURE, "main: fork");
 
 		close(filedes[1]);
 	} else {
@@ -1539,12 +1536,13 @@ int main(int argc, char *argv[])
 
 	if (opt_background) {
 		if ((read(filedes[0], &buf, 1)) == -1)
-			err(EXIT_FAILURE, "read: pipe");
+			err(EXIT_FAILURE, "main: read(pipe)");
 
 		close(filedes[0]);
 	}
 
 	if (opt_debug) printf("DEBUG: main: exiting\n");
 
+	regfree(&rfc5242_tz);
 	exit(EXIT_SUCCESS);
 }
