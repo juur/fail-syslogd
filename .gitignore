@@ -6,4 +6,5 @@ Makefile
 *.pid
 *.log
 *.conf
+tags
 .d
