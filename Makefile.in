@@ -14,7 +14,7 @@ YACC		    := @@YACC@@
 LFLAGS          := @@LFLAGS@@
 YFLAGS          := @@YFLAGS@@ -d -t
 CFLAGS          := @@CFLAGS@@ -std=c11
-CPPFLAGS        := @@CPPFLAGS@@
+CPPFLAGS        := @@CPPFLAGS@@ -DNDEBUG
 LDFLAGS         := -L$(srcdir)/src -L$(objdir) -L. @@LDFLAGS@@
 CAT             := cat
 CP              := cp

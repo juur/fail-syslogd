@@ -27,6 +27,7 @@
 #include <arpa/inet.h>
 #include <sys/time.h>
 #include <limits.h>
+#include <assert.h>
 
 
 
@@ -622,7 +623,7 @@ static struct entry *find_match(struct entry *entries, int fac, int pri, bool an
 }
 
 __attribute__((nonnull(1,2,4)))
-static void process_record(
+static int process_record(
 		struct entry *entries,
 		char         *string,
 		format_t      format,
@@ -631,12 +632,14 @@ static void process_record(
 		       int    family)
 {
 	char  *ptr;
-	int    facility, priority, rc;
+	int    facility, priority, rc, errval;
 	time_t now, event;
 	char   hostname[64 + 1];
 
 	struct entry *match, *start;
 	struct record *record;
+
+	errval = EINVAL;
 
 	if (opt_debug) printf("DEBUG: process_record(%p, <>)\n", entries);
 
@@ -887,8 +890,10 @@ static void process_record(
 	{
         if ((match = find_match(start, facility, priority, false)) == NULL
 			/* TODO && (match = find_match(start, facility, priority, true)) == NULL */
-           )
-            return;
+           ) {
+			errno = ESRCH;
+            return -1;
+		}
 
         if (opt_debug) 
             printf("DEBUG: process_record: target=[%s]<%s>\n", 
@@ -904,7 +909,7 @@ static void process_record(
 	if (record)
 		free_record(record);
 
-    return;
+    return 0;
 
 bad_fmt:
     warnx("process_record: bad format in record");
@@ -912,7 +917,7 @@ bad_fmt:
 	if (record)
 		free_record(record);
 
-    return;
+    return -errval;
 }
 
     __attribute__((nonnull))
@@ -1391,7 +1396,7 @@ static struct entry *parse_config(FILE *fp)
 			goto reset;
 		}
 
-		warnx("parse_config: illegal line: <%s>\n", linebuf);
+		warnx("parse_config: illegal line: <%s>", linebuf);
 
 reset:
 		/* reset buffers etc. for another process */
@@ -1478,6 +1483,28 @@ static void show_usage(void)
 	exit(EXIT_FAILURE);
 }
 
+static void init_regex(void)
+{
+	int rc;
+	char  errbuf[BUFSIZ];
+
+	if ((rc = regcomp(&main_line, main_line_re, REG_EXTENDED|REG_ICASE)) != 0) {
+		regerror(rc, &main_line, errbuf, sizeof(errbuf));
+		errx(EXIT_FAILURE, "regcomp: main_line: %s", errbuf);
+	}
+
+	if ((rc = regcomp(&comment_line, comment_line_re, REG_EXTENDED|REG_ICASE)) != 0) {
+		regerror(rc, &comment_line, errbuf, sizeof(errbuf));
+		errx(EXIT_FAILURE, "regcomp: comment_line: %s", errbuf);
+	}
+
+    if ((rc = regcomp(&rfc5242_tz, rfc5242_tz_re, REG_EXTENDED)) != 0) {
+        regerror(rc, &rfc5242_tz, errbuf, sizeof(errbuf));
+		errx(EXIT_FAILURE, "regcomp: rfc5242_tz: %s", errbuf);
+    }
+
+}
+
 int main(int argc, char *argv[])
 {
 	opt_mainsock = default_mainsock;
@@ -1515,29 +1542,15 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	int   rc;
 	int   filedes[2];
 	char  buf;
 	pid_t child;
 	FILE *conf;
-	char  errbuf[BUFSIZ];
 
 	struct entry *entries;
 
-	if ((rc = regcomp(&main_line, main_line_re, REG_EXTENDED|REG_ICASE)) != 0) {
-		regerror(rc, &main_line, errbuf, sizeof(errbuf));
-		errx(EXIT_FAILURE, "regcomp: main_line: %s", errbuf);
-	}
+	init_regex();
 
-	if ((rc = regcomp(&comment_line, comment_line_re, REG_EXTENDED|REG_ICASE)) != 0) {
-		regerror(rc, &comment_line, errbuf, sizeof(errbuf));
-		errx(EXIT_FAILURE, "regcomp: comment_line: %s", errbuf);
-	}
-
-    if ((rc = regcomp(&rfc5242_tz, rfc5242_tz_re, REG_EXTENDED)) != 0) {
-        regerror(rc, &rfc5242_tz, errbuf, sizeof(errbuf));
-		errx(EXIT_FAILURE, "regcomp: rfc5242_tz: %s", errbuf);
-    }
 
 	if (opt_debug) printf("DEBUG: main: opening config file <%s>\n", opt_config);
 
@@ -1546,6 +1559,8 @@ int main(int argc, char *argv[])
 
 	if ((entries = parse_config(conf)) == NULL)
 		errx(EXIT_FAILURE, "unable to parse config, or config is empty");
+
+	assert(entries->num_sel != 0);
 
 	fclose(conf);
 
