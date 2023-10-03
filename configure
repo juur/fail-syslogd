@@ -28,12 +28,16 @@ Directory and file names:
   --sbindir=DIR
   --sharedstatedir=DIR
   --sysconfdir=DIR
+Features:
+  --enable-inet             include support for IP-based features (default)
+  --disable-inet            exclude support for IP-based features
 
 EOF
 }
 
 QUIET=0
 DEPS=1
+FEATURE_INET=1
 
 while :; do
 	case ${1:-} in
@@ -63,6 +67,8 @@ while :; do
 		--program-prefix=) PROGPREFIX= ;;
 		--disable-dependency-tracking) DEPS=0 ;;
 		--enable-dependency-tracking) DEPS=1 ;;
+		--enable-inet) FEATURE_INET=1 ;;
+		--disable-inet) FEATURE_INET=0 ;;
 		*) [[ -n "${1-}" ]] && { echo "Unknown argument ${1}" >&2; exit 1; } ;;
 	esac
 	shift || break
@@ -154,11 +160,11 @@ echo "objdir = ${OBJDIR} / srcdir = ${SRCDIR}"
 
 # List of system headers we need to check for
 
-H_FILES="stdlib.h stdint.h stdio.h string.h getopt.h err.h dirent.h errno.h ctype.h sys/time.h sys/types.h pwd.h grp.h unistd.h sys/utsname.h sys/stat.h fcntl.h time.h stdbool.h limits.h"
+H_FILES="stdlib.h syslog.h err.h stdio.h ctype.h string.h strings.h regex.h stdbool.h sys/types.h unistd.h sys/stat.h fcntl.h signal.h sys/socket.h sys/un.h sys/wait.h time.h errno.h sys/select.h netdb.h netinet/in.h arpa/inet.h sys/time.h limits.h assert.h"
 
 # List of system functions to check for function:arg0,arg1
 
-FUNC_CHECK=""
+FUNC_CHECK="strptime:NULL,NULL,NULL err:0,NULL warn:NULL"
 
 # List of pkg-config things to check for
 
@@ -201,7 +207,7 @@ check_header()
 {
 	echo -n "Checking for ${1} ... "
 	echo "#include <${1}>" | \
-		"${CC}" "${CFLAGS}" "${CPPFLAGS}" "${LDFLAGS}" -E - -o /dev/null 2>>config.log
+		"${CC}" ${CFLAGS} ${CPPFLAGS} ${LDFLAGS} -E - -o /dev/null 2>>config.log
 	local RT=$?
 	ok $?
 	return ${RT}
@@ -214,7 +220,7 @@ check_lib()
 	echo "#define _GNU_SOURCE" >${F}
 	echo 'main(){}' >>${F}
 	echo -n "Checking for -l${1} ... "
-	"${CC}" "${LDFLAGS}" "${CPPFLAGS}" "${CFLAGS}" -l"${1}" "${F}" \
+	"${CC}" ${LDFLAGS} ${CPPFLAGS} ${CFLAGS} -l"${1}" "${F}" \
 		-o /dev/null 2>>config.log
 	local RT=$?
 	ok ${RT}
@@ -235,13 +241,13 @@ check_func()
 	local ARGS
 	ARGS="$(echo "${1}" | cut -d: -f2-)"
 
-	echo "#define _GNU_SOURCE" >${F}
+	echo "#define _XOPEN_SOURCE 700" >${F}
 	for i in ${H_FILES} ; do
 		echo "#include <${i}>" >>${F}
 	done
 	echo "void main() { ${FUNC}(${ARGS}); }" >>${F}
 	echo -n "Checking for ${FUNC}() ... "
-	"${CC}" "${LDFLAGS}" "${CPPFLAGS}" "${CFLAGS}" "${F}" -o /dev/null 2>>config.log
+	"${CC}" ${LDFLAGS} ${CPPFLAGS} ${CFLAGS} "${F}" -o /dev/null 2>>config.log
 	local RT=$?
 
 	ok ${RT}
@@ -272,7 +278,7 @@ done
 # library checks
 
 for f in ${LIB_CHECK} ; do
-	if check_lib "${f}"; then LDFLAGS="${LDFLAGS} -l${f}" ; fi
+	if check_lib "${f}"; then LDFLAGS="${LDFLAGS} -l\"${f}\"" ; fi
 done
 
 # Perform checks for system headers and functions
@@ -293,6 +299,10 @@ for f in ${FUNC_CHECK}; do
 done
 
 # Append any *DIR variables to config.h here
+
+if [[ FEATURE_INET -eq 1 ]]; then
+	echo "#define ENABLE_INET 1" >> "${OBJDIR}"/config.h
+fi
 
 # Create Makefile from template
 

@@ -1,32 +1,36 @@
-#define _XOPEN_SOURCE 700
-
 #include "config.h"
 
-#include <stdlib.h>
-#include <syslog.h>
-#include <err.h>
-#include <stdio.h>
+#define _XOPEN_SOURCE 700
+
 #include <ctype.h>
+#include <err.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
+#include <regex.h>
+#include <signal.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include <regex.h>
-#include <stdbool.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <signal.h>
+#include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/types.h>
 #include <sys/un.h>
 #include <sys/wait.h>
+#include <syslog.h>
 #include <time.h>
-#include <errno.h>
-#include <sys/select.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/time.h>
-#include <limits.h>
+#include <unistd.h>
+
+#ifdef ENABLE_INET
+# include <netdb.h>
+# include <netinet/in.h>
+# include <arpa/inet.h>
+#endif
+
 #include <assert.h>
 
 
@@ -71,7 +75,9 @@ struct record {
 	int   priority;
 	char *sender;
 	
+#ifdef ENABLE_INET
 	struct in_addr src_ip;
+#endif
     struct timeval tv;
     /* TODO data */
 };
@@ -445,6 +451,7 @@ static void clean_pid(void)
 		warn("unlink: syslog.pid");
 }
 
+#ifdef ENABLE_INET
 static void clean_remote(void)
 {
     if (remote_fd != -1) {
@@ -454,6 +461,7 @@ static void clean_remote(void)
         remote_fd = -1;
     }
 }
+#endif
 
 static void clean_log_fd(void)
 {
@@ -557,6 +565,7 @@ static int setup_unix_socket(const char *path)
     return ret;
 }
 
+#ifdef ENABLE_INET
 __attribute__((nonnull, warn_unused_result))
 static int setup_ip_socket(int port, int type)
 {
@@ -584,6 +593,7 @@ static int setup_ip_socket(int port, int type)
     
     return ret;
 }
+#endif
 
 __attribute__((nonnull))
 static struct entry *find_match(struct entry *entries, int fac, int pri, bool any __attribute__((unused)))
@@ -627,9 +637,13 @@ static int process_record(
 		struct entry *entries,
 		char         *string,
 		format_t      format,
-		const char   *sender,
+		const char   *sender
+#ifdef ENABLE_INET
+		,
 		const void   *proto_specific,
-		       int    family)
+		       int    family
+#endif
+			   )
 {
 	char  *ptr;
 	int    facility, priority, rc, errval;
@@ -678,10 +692,12 @@ static int process_record(
 	record->priority = priority;
 	record->sender   = strdup(sender);
 
+#ifdef ENABLE_INET
 	if (family == AF_INET && proto_specific)
 		record->src_ip = *(struct in_addr *)proto_specific;
 	else
 		record->src_ip.s_addr = 0;
+#endif
 
     /* mmm dd HH:MM:SS (.+:)? .* */
     if (format != TYPE_RFC5424) {
@@ -976,7 +992,11 @@ static void main_loop(struct entry *entries)
             socklen_t so_type_len;
             int       so_type;
 
+#ifdef ENABLE_INET	
             struct sockaddr_in sa_in;
+#else
+			struct sockaddr sa_in;
+#endif
 
             if (fds[i] == -1)
                 continue;
@@ -999,14 +1019,19 @@ static void main_loop(struct entry *entries)
 
             if (FD_ISSET(fds[i], &input_fd)) {
                 const char *name;
+#ifdef ENABLE_INET
 				const void *proto_specific;
+#endif
                 format_t    format;
 				int         family;
 
 				name = NULL;
+#ifdef ENABLE_INET
 				proto_specific = NULL;
-				family = sa_in.sin_family;
+#endif
+				family = ((struct sockaddr *)&sa_in)->sa_family;
 
+#ifdef ENABLE_INET
                 if (family == AF_INET && so_type == SOCK_DGRAM) {
                     sin_len = sizeof(sa_in);
 
@@ -1019,12 +1044,16 @@ static void main_loop(struct entry *entries)
 						name           = inet_ntoa(sa_in.sin_addr);
 						proto_specific = &sa_in.sin_addr;
 					}
-                } else if (family == AF_UNIX && so_type == SOCK_DGRAM) {
+                } else 
+#endif
+					if (family == AF_UNIX && so_type == SOCK_DGRAM) {
                     rc = read(log_fd, buf, sizeof(buf) - 1);
                     format         = TYPE_LOCAL;
 
                     name           = "-";
+#ifdef ENABLE_INET
 					proto_specific = NULL;
+#endif
                 } else {
                     /* TODO should this error? */
                     name = "UNKNOWN";
@@ -1052,7 +1081,11 @@ static void main_loop(struct entry *entries)
 
                 buf[++rc] = '\0';
 
-                process_record(entries, buf, format, name, proto_specific, family);
+                process_record(entries, buf, format, name
+#ifdef ENABLE_INET
+						, proto_specific, family
+#endif
+						);
             }
         }
 
@@ -1060,7 +1093,7 @@ static void main_loop(struct entry *entries)
 }
 
 
-    __attribute__((nonnull))
+__attribute__((nonnull))
 static void daemon(struct entry *entries, int pipe_fd)
 {
     pid_t child;
@@ -1128,6 +1161,7 @@ static void daemon(struct entry *entries, int pipe_fd)
     log_fd = setup_unix_socket(opt_mainsock);
     atexit(clean_log_fd);
 
+#ifdef ENABLE_INET
     if (opt_remote) {
         if (opt_debug) printf("DEBUG: daemon: setting up main remote socket\n");
         struct servent *ent;
@@ -1142,6 +1176,7 @@ static void daemon(struct entry *entries, int pipe_fd)
         remote_fd = setup_ip_socket(port, SOCK_DGRAM);
         atexit(clean_remote);
     }
+#endif
 
     if (opt_debug) printf("DEBUG: daemon: entering main loop\n");
     running = true;
