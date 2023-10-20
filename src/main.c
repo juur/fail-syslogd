@@ -566,7 +566,7 @@ static int setup_unix_socket(const char *path)
 }
 
 #ifdef ENABLE_INET
-__attribute__((nonnull, warn_unused_result))
+__attribute__((warn_unused_result))
 static int setup_ip_socket(int port, int type)
 {
     int ret = -1;
@@ -907,8 +907,8 @@ static int process_record(
         if ((match = find_match(start, facility, priority, false)) == NULL
 			/* TODO && (match = find_match(start, facility, priority, true)) == NULL */
            ) {
-			errno = ESRCH;
-            return -1;
+			errval = ESRCH;
+			goto bad;
 		}
 
         if (opt_debug) 
@@ -929,7 +929,7 @@ static int process_record(
 
 bad_fmt:
     warnx("process_record: bad format in record");
-
+bad:
 	if (record)
 		free_record(record);
 
@@ -1362,6 +1362,7 @@ static struct entry *process_line(char *one, const char *two)
         ent->selectors[i].priority = priority;
         ent->selectors[i].facility = fac;
 skip:
+	;
     }
 
     free(selectors);
@@ -1620,6 +1621,7 @@ int main(int argc, char *argv[])
 
 		close(filedes[1]);
 	} else {
+		filedes[0] = -1; /* to fix clang analyzer */
 		if (opt_debug) printf("DEBUG: main: running in foreground\n");
 		daemon(entries, 0);
 	}
