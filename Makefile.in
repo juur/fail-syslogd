@@ -82,7 +82,7 @@ mostlyclean:
 	$(RM) $(package_OBJS) $(objdir)/$(PACKAGE)
 
 clean: mostlyclean
-#	$(RM) $(objdir)/$(PACKAGE).8
+	$(RM) $(objdir)/$(PACKAGE).8
 
 distclean: clean
 	$(RM) config.log
