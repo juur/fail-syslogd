@@ -61,10 +61,10 @@ while :; do
 		--sysconfdir=?*) SYSCONFDIR=${1#*=} ;;
 		--target=?*) TARGET=${1#*=} ;;
 # These are added to keep RPM %configure error free		
-		--build=?*) BUILD=${1#*=} ;;
-		--host=?*) HOST=${1#*=} ;;
-		--program-prefix=?*) PROGPREFIX=${1#*=} ;;
-		--program-prefix=) PROGPREFIX= ;;
+		--build=?*) ;;
+		--host=?*) ;;
+		--program-prefix=?*) ;;
+		--program-prefix=) ;;
 		--disable-dependency-tracking) DEPS=0 ;;
 		--enable-dependency-tracking) DEPS=1 ;;
 		--enable-inet) FEATURE_INET=1 ;;
@@ -145,7 +145,7 @@ fi
 
 echo -n "Checking $(basename "${CC}") can produce executables ... "
 echo -e '#include <stdlib.h>\nmain() {exit(0);}' | \
-	if gcc -xc -o /dev/null - 2>>config.log; then 
+	if ${CC} -xc -o /dev/null - 2>>config.log; then 
 		echo "Ok"
 	else 
 		{ echo "Fail"; exit 1; } 
@@ -206,6 +206,7 @@ fail()
 check_header()
 {
 	echo -n "Checking for ${1} ... "
+	# shellcheck disable=SC2086
 	echo "#include <${1}>" | \
 		"${CC}" ${CFLAGS} ${CPPFLAGS} ${LDFLAGS} -E - -o /dev/null 2>>config.log
 	local RT=$?
@@ -220,7 +221,8 @@ check_lib()
 	echo "#define _GNU_SOURCE" >${F}
 	echo 'main(){}' >>${F}
 	echo -n "Checking for -l${1} ... "
-	"${CC}" ${LDFLAGS} ${CPPFLAGS} ${CFLAGS} -l"${1}" "${F}" \
+	# shellcheck disable=SC2086
+	"${CC}" ${LDFLAGS} ${CPPFLAGS} ${CFLAGS} "-l${1}" "${F}" \
 		-o /dev/null 2>>config.log
 	local RT=$?
 	ok ${RT}
@@ -247,6 +249,7 @@ check_func()
 	done
 	echo "void main() { ${FUNC}(${ARGS}); }" >>${F}
 	echo -n "Checking for ${FUNC}() ... "
+	# shellcheck disable=SC2086
 	"${CC}" ${LDFLAGS} ${CPPFLAGS} ${CFLAGS} "${F}" -o /dev/null 2>>config.log
 	local RT=$?
 

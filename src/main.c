@@ -1509,14 +1509,26 @@ skip:
 
 static void show_version(void)
 {
-	fprintf(stderr, "fail-syslogd version " VERSION "\n");
+	printf("fail-syslogd version " VERSION "\n");
 }
 
 static void show_usage(void)
 {
-	show_version();
-	fprintf(stderr, "Usage: syslogd [-dhnrSvx] [-a socket] [-f config_file] [-l hostlist] [-m interval] [-p socket] [-s domainlist]");
-	exit(EXIT_FAILURE);
+	printf("Usage: fail-syslogd [OPTION]...\n\n"
+			" -d  debug\n"
+			" -h  help\n"
+			" -H  forward\n"
+			" -n  foreground\n"
+			" -r  remote\n"
+			" -S  verbose\n"
+			" -v  version\n"
+			" -x  disable DNS\n"
+			" -a socket\n"
+			" -f config_file\n"
+			" -l hostlist\n"
+			" -m interval\n"
+			" -p socket\n"
+			" -s domainlist\n");
 }
 
 static void init_regex(void)
@@ -1548,14 +1560,14 @@ int main(int argc, char *argv[])
 
 	{
 		int opt;
-		while ((opt = getopt(argc, argv, "dhnrSvxa:f:l:m:p:s:")) != -1)
+		while ((opt = getopt(argc, argv, "dhHnrSvxa:f:l:m:p:s:")) != -1)
 		{
 			switch (opt)
 			{
 				case 'd': opt_debug = true;       
 						  /* fall-through */
 				case 'n': opt_background = false; break;
-				case 'h': opt_forward = true;     break;
+				case 'H': opt_forward = true;     break;
 				case 'r': opt_remote = true;      break;
 				case 'S': opt_verbose++;          break;
 				case 'x': opt_rdns = false;       break;
@@ -1572,8 +1584,12 @@ int main(int argc, char *argv[])
 				case 'v':
 						  show_version();
 						  exit(EXIT_SUCCESS);
+				case 'h':
+						  show_usage();
+						  exit(EXIT_SUCCESS);
 				default:
 						  show_usage();
+						  exit(EXIT_FAILURE);
 			}
 		}
 	}
