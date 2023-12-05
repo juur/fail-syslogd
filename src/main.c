@@ -827,7 +827,8 @@ static int process_record(
 				char c;
 				int hr, min;
 
-				strncpy(tmp, date + pmatch[10].rm_so, len);
+                memset(tmp, 0, len);
+				strncat(tmp, date + pmatch[10].rm_so, len);
 				sscanf(tmp, "%c%02u:%02u", &c, &hr, &min); /* TODO error */
 
 				min += (hr * 60);
