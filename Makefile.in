@@ -61,7 +61,7 @@ $(objdir)/$(PACKAGE).8: $(objdir)/$(PACKAGE)
 	-$(HELP2MAN) -N -s 8 -S 'ZeroDay Linux' --help-option=-h --version-option=-v -o $@ $<
 
 $(objdir)/$(PACKAGE): $(package_OBJS)
-	$(CC) $(LDFLAGS) $(package_OBJS) -o $@
+	$(CC) $< $(LDFLAGS) -o $@
 
 
 .PHONY: install uninstall
