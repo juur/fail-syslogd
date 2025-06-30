@@ -33,14 +33,10 @@
 
 #include <assert.h>
 
-
-
 #define MAX(a,b) ((a) > (b) ? (a) : (b))
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define LOG_NONE -2
 #define LOG_ALL -3
-
-
 
 typedef enum {
     TYPE_FILE   = 1,
@@ -54,8 +50,6 @@ typedef enum {
     TYPE_RFC3164,
     TYPE_RFC5424,
 } format_t;
-
-
 
 struct selector {
     int facility;
@@ -107,8 +101,6 @@ struct entry {
 };
 
 
-
-
 static bool   opt_debug       = false;
 static bool   opt_forward     = false;
 static bool   opt_background  = true;
@@ -132,8 +124,6 @@ static int     log_fd;
 static int     remote_fd;
 static bool    running;
 static time_t  last_mark;
-
-
 
 /*
  * group 1: selector_list
@@ -209,8 +199,6 @@ static const char *const record_types[] = {
     [TYPE_RFC5424] = "TYPE_RFC5424",
 };
 
-
-
 /* parsing:
  *
  * if the line ends in \, then merge with following line (repeat)
@@ -246,7 +234,6 @@ static const char *get_fac_name(int fac)
 
     return "UNDEFINED";
 }
-
 
 static void print_record(FILE *to, const struct record *r)
 {
