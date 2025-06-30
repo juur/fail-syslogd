@@ -43,10 +43,10 @@
 
 
 typedef enum {
-	TYPE_FILE   = 1,
-	TYPE_REMOTE = 2,
-	TYPE_USER   = 3,
-	TYPE_OTHER  = 4
+    TYPE_FILE   = 1,
+    TYPE_REMOTE = 2,
+    TYPE_USER   = 3,
+    TYPE_OTHER  = 4
 } target_t;
 
 typedef enum {
@@ -58,25 +58,25 @@ typedef enum {
 
 
 struct selector {
-	int facility;
-	int priority;
+    int facility;
+    int priority;
 };
 
 struct record {
-	format_t type;
+    format_t type;
 
-	int   version;
-	char *hostname;
+    int   version;
+    char *hostname;
     char *appname;
     char *procid;
     char *msgid;
     char *msg;
-	int   facility;
-	int   priority;
-	char *sender;
-	
+    int   facility;
+    int   priority;
+    char *sender;
+
 #ifdef ENABLE_INET
-	struct in_addr src_ip;
+    struct in_addr src_ip;
 #endif
     struct timeval tv;
     /* TODO data */
@@ -116,7 +116,7 @@ static bool   opt_remote      = false;
 static int    opt_verbose     = 0;
 static bool   opt_rdns        = true;
 __attribute__((unused))
-static int    opt_num_sockets = 0; 
+static int    opt_num_sockets = 0;
 static int    opt_interval    = 20;
 
 static const char  *opt_config      = NULL;
@@ -135,7 +135,7 @@ static time_t  last_mark;
 
 
 
-/* 
+/*
  * group 1: selector_list
  * group 2: action
  * group 3: comment (ignored)
@@ -148,65 +148,65 @@ static const char rfc5242_tz_re[]    = "^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]
 static const char default_mainsock[] = "/tmp/log";
 static const char default_config[]   = SYSCONFDIR "/syslogd.conf";
 
-static const struct { 
-    const char *const name; 
+static const struct {
+    const char *const name;
     const int facility;
 } facility_names[] = {
-	{"auth"     , LOG_AUTH     },
-	{"authpriv" , LOG_AUTHPRIV },
-	{"cron"     , LOG_CRON     },
-	{"daemon"   , LOG_DAEMON   },
-	{"kern"     , LOG_KERN     },
-	{"lpr"      , LOG_LPR      },
-	{"mail"     , LOG_MAIL     },
-	{"news"     , LOG_NEWS     },
-	{"syslog"   , LOG_SYSLOG   },
-	{"user"     , LOG_USER     },
-	{"uucp"     , LOG_UUCP     },
-	{"local0"   , LOG_LOCAL0   },
-	{"local1"   , LOG_LOCAL1   },
-	{"local2"   , LOG_LOCAL2   },
-	{"local3"   , LOG_LOCAL3   },
-	{"local4"   , LOG_LOCAL4   },
-	{"local5"   , LOG_LOCAL5   },
-	{"local6"   , LOG_LOCAL6   },
-	{"local7"   , LOG_LOCAL7   },
+    {"auth"     , LOG_AUTH     },
+    {"authpriv" , LOG_AUTHPRIV },
+    {"cron"     , LOG_CRON     },
+    {"daemon"   , LOG_DAEMON   },
+    {"kern"     , LOG_KERN     },
+    {"lpr"      , LOG_LPR      },
+    {"mail"     , LOG_MAIL     },
+    {"news"     , LOG_NEWS     },
+    {"syslog"   , LOG_SYSLOG   },
+    {"user"     , LOG_USER     },
+    {"uucp"     , LOG_UUCP     },
+    {"local0"   , LOG_LOCAL0   },
+    {"local1"   , LOG_LOCAL1   },
+    {"local2"   , LOG_LOCAL2   },
+    {"local3"   , LOG_LOCAL3   },
+    {"local4"   , LOG_LOCAL4   },
+    {"local5"   , LOG_LOCAL5   },
+    {"local6"   , LOG_LOCAL6   },
+    {"local7"   , LOG_LOCAL7   },
 
-	{"*"        , LOG_ALL      },
+    {"*"        , LOG_ALL      },
 
-	{NULL       , -1           } 
+    {NULL       , -1           }
 };
 
-static const struct { 
-    const char *const name; 
+static const struct {
+    const char *const name;
     const int priority;
 } priority_names[] = {
-	{"debug"   , LOG_DEBUG   },
-	{"info"    , LOG_INFO    },
-	{"notice"  , LOG_NOTICE  },
-	{"warning" , LOG_WARNING },
-	{"err"     , LOG_ERR     },
-	{"crit"    , LOG_CRIT    },
-	{"alert"   , LOG_ALERT   },
-	{"emerg"   , LOG_EMERG   },
-	{"none"    , LOG_NONE    },
+    {"debug"   , LOG_DEBUG   },
+    {"info"    , LOG_INFO    },
+    {"notice"  , LOG_NOTICE  },
+    {"warning" , LOG_WARNING },
+    {"err"     , LOG_ERR     },
+    {"crit"    , LOG_CRIT    },
+    {"alert"   , LOG_ALERT   },
+    {"emerg"   , LOG_EMERG   },
+    {"none"    , LOG_NONE    },
 
-	{"*"       , LOG_ALL     },
+    {"*"       , LOG_ALL     },
 
-	{NULL      , -1          } 
+    {NULL      , -1          }
 };
 
 static const char *const target_type[] = {
-	[TYPE_FILE]   = "TYPE_FILE",
-	[TYPE_OTHER]  = "TYPE_OTHER",
-	[TYPE_REMOTE] = "TYPE_REMOTE",
-	[TYPE_USER]   = "TYPE_USER",
+    [TYPE_FILE]   = "TYPE_FILE",
+    [TYPE_OTHER]  = "TYPE_OTHER",
+    [TYPE_REMOTE] = "TYPE_REMOTE",
+    [TYPE_USER]   = "TYPE_USER",
 };
 
 static const char *const record_types[] = {
-	[TYPE_LOCAL]   = "TYPE_LOCAL",
-	[TYPE_RFC3164] = "TYPE_RFC3164",
-	[TYPE_RFC5424] = "TYPE_RFC5424",
+    [TYPE_LOCAL]   = "TYPE_LOCAL",
+    [TYPE_RFC3164] = "TYPE_RFC3164",
+    [TYPE_RFC5424] = "TYPE_RFC5424",
 };
 
 
@@ -231,40 +231,40 @@ static const char *const record_types[] = {
 
 static const char *get_pri_name(int pri)
 {
-	for (int i = 0; priority_names[i].name; i++)
-		if (priority_names[i].priority == pri)
-			return priority_names[i].name;
+    for (int i = 0; priority_names[i].name; i++)
+        if (priority_names[i].priority == pri)
+            return priority_names[i].name;
 
-	return "UNDEFINED";
+    return "UNDEFINED";
 }
 
 static const char *get_fac_name(int fac)
 {
-	for (int i = 0; facility_names[i].name; i++)
-		if (facility_names[i].facility == fac)
-			return facility_names[i].name;
+    for (int i = 0; facility_names[i].name; i++)
+        if (facility_names[i].facility == fac)
+            return facility_names[i].name;
 
-	return "UNDEFINED";
+    return "UNDEFINED";
 }
 
 
 static void print_record(FILE *to, const struct record *r)
 {
-	fprintf(to, 
-			"type=[%s] facility=%s[%02d] priority=%s[%02d] version=%02d tv=%lu.%06lu "
-			"hostname=<%s> appname=<%s> procid=<%s> msgid=<%s> msg=<%s>",
-			record_types[r->type],
-			get_fac_name(r->facility), r->facility,
-			get_pri_name(r->priority), r->priority,
-			r->version,
-			r->tv.tv_sec,
-			r->tv.tv_usec,
-			r->hostname ? r->hostname : "",
-			r->appname ? r->appname : "",
-			r->procid ? r->procid : "",
-			r->msgid ? r->msgid : "",
-			r->msg ? r->msg : ""
-		   );
+    fprintf(to,
+            "type=[%s] facility=%s[%02d] priority=%s[%02d] version=%02d tv=%lu.%06lu "
+            "hostname=<%s> appname=<%s> procid=<%s> msgid=<%s> msg=<%s>",
+            record_types[r->type],
+            get_fac_name(r->facility), r->facility,
+            get_pri_name(r->priority), r->priority,
+            r->version,
+            r->tv.tv_sec,
+            r->tv.tv_usec,
+            r->hostname ? r->hostname : "",
+            r->appname ? r->appname : "",
+            r->procid ? r->procid : "",
+            r->msgid ? r->msgid : "",
+            r->msg ? r->msg : ""
+           );
 }
 
 __attribute__((nonnull))
@@ -274,21 +274,21 @@ static void send_log(struct entry *ent, const struct record *record)
     size_t len;
     int    times;
 
-	char   buf[BUFSIZ];
+    char   buf[BUFSIZ];
 
     struct tm   *tm;
     struct stat  sb;
 
-	if (opt_debug) {
-		printf("DEBUG: send_log: record: ");
-		print_record(stdout, record);
-		printf("\n");
-	}
+    if (opt_debug) {
+        printf("DEBUG: send_log: record: ");
+        print_record(stdout, record);
+        printf("\n");
+    }
 
-	if ((tm = localtime(&record->tv.tv_sec)) == NULL)
-		err(EXIT_FAILURE, "send_log: localtime(%lu)", record->tv.tv_sec);
-	
-	len = sizeof(buf) - 1;
+    if ((tm = localtime(&record->tv.tv_sec)) == NULL)
+        err(EXIT_FAILURE, "send_log: localtime(%lu)", record->tv.tv_sec);
+
+    len = sizeof(buf) - 1;
     times = 0;
 
     switch (ent->type)
@@ -297,28 +297,28 @@ static void send_log(struct entry *ent, const struct record *record)
             break;
 
         case TYPE_FILE:
-			/* Mmm dd HH:MM:SS hostname appname[procid]: msg */
+            /* Mmm dd HH:MM:SS hostname appname[procid]: msg */
 
-			/* Timestamp */
-			len -= strftime(buf, 17, "%b %e %T ", tm);
+            /* Timestamp */
+            len -= strftime(buf, 17, "%b %e %T ", tm);
 
-			/* Hostname */
-			len -= snprintf(buf + strlen(buf), len, "%s ", record->hostname ? record->hostname : "-");
+            /* Hostname */
+            len -= snprintf(buf + strlen(buf), len, "%s ", record->hostname ? record->hostname : "-");
 
-			/* Appname */
-			if (record->appname) {
-				if (record->procid)
-					/* procid, if present */
-					len -= snprintf(buf + strlen(buf), len, "%s[%s]: ", record->appname, record->procid);
-				else
-					len -= snprintf(buf + strlen(buf), len, "%s: ", record->appname);
-			}
+            /* Appname */
+            if (record->appname) {
+                if (record->procid)
+                    /* procid, if present */
+                    len -= snprintf(buf + strlen(buf), len, "%s[%s]: ", record->appname, record->procid);
+                else
+                    len -= snprintf(buf + strlen(buf), len, "%s: ", record->appname);
+            }
 
-			/* msgid is not logged to files typically on Linux */
+            /* msgid is not logged to files typically on Linux */
 
-			/* msg and trailing \n */
-			if (record->msg)
-				snprintf(buf + strlen(buf), len, "%s\n", record->msg);
+            /* msg and trailing \n */
+            if (record->msg)
+                snprintf(buf + strlen(buf), len, "%s\n", record->msg);
 again:
             if (ent->target.file.fd == -1) {
                 if (times++) {
@@ -330,13 +330,13 @@ again:
                 if (opt_debug) printf("DEBUG: send_log: (re)opening <%s>\n",
                         ent->target.file.name);
 
-                if ((ent->target.file.fd = open(ent->target.file.name, 
-                                O_WRONLY|O_APPEND|O_CREAT|O_NOCTTY, 
+                if ((ent->target.file.fd = open(ent->target.file.name,
+                                O_WRONLY|O_APPEND|O_CREAT|O_NOCTTY,
                                 S_IWUSR|S_IRUSR)) == -1) {
                     warn("send_log: open: <%s>:", ent->target.file.name);
                     goto again;
-				}
-			}
+                }
+            }
 
             if ((rc = fstat(ent->target.file.fd, &sb)) == -1) {
                 warn("send_log: fstat: <%s>:", ent->target.file.name);
@@ -348,29 +348,29 @@ again:
                 goto barf;
             }
 
-			if ((rc = write(ent->target.file.fd, buf, strlen(buf))) == -1) {
-				warn("send_log: write: <%s>:", ent->target.file.name);
+            if ((rc = write(ent->target.file.fd, buf, strlen(buf))) == -1) {
+                warn("send_log: write: <%s>:", ent->target.file.name);
 barf:
-				close(ent->target.file.fd);
-				ent->target.file.fd = -1;
+                close(ent->target.file.fd);
+                ent->target.file.fd = -1;
                 goto again;
-			}
+            }
 
-			if (ent->sync)
-				fdatasync(ent->target.file.fd);
-				
-			break;
-		
-		case TYPE_OTHER:
+            if (ent->sync)
+                fdatasync(ent->target.file.fd);
+
+            break;
+
+        case TYPE_OTHER:
             if (opt_debug) printf("DEBUG: send_log: TYPE_OTHER\n");
-			return send_log(ent->target.other, record);
-		
-		case TYPE_REMOTE:
-			break;
-		
-		default:
-			warnx("send_log: unknown TYPE: %d", ent->type);
-	}
+            return send_log(ent->target.other, record);
+
+        case TYPE_REMOTE:
+            break;
+
+        default:
+            warnx("send_log: unknown TYPE: %d", ent->type);
+    }
 }
 
 __attribute__((nonnull))
@@ -387,68 +387,68 @@ static void free_record(struct record *r)
 __attribute__((nonnull))
 static void trim(char *str)
 {
-	int pos;
+    int pos;
 
-	pos = strlen(str) - 1;
+    pos = strlen(str) - 1;
 
-	while (pos && isspace(str[pos]))
-		str[pos--] = '\0';
+    while (pos && isspace(str[pos]))
+        str[pos--] = '\0';
 }
 
 __attribute__((nonnull))
 static int lookup_fac(const char *txt)
 {
-	for (int i = 0; facility_names[i].name; i++)
-		if (!strcasecmp(txt, facility_names[i].name))
-			return facility_names[i].facility;
+    for (int i = 0; facility_names[i].name; i++)
+        if (!strcasecmp(txt, facility_names[i].name))
+            return facility_names[i].facility;
 
-	return -1;
+    return -1;
 }
 
 __attribute__((nonnull))
 static int lookup_pri(const char *txt)
 {
-	for (int i = 0; priority_names[i].name; i++)
-		if (!strcasecmp(txt, priority_names[i].name))
-			return priority_names[i].priority;
+    for (int i = 0; priority_names[i].name; i++)
+        if (!strcasecmp(txt, priority_names[i].name))
+            return priority_names[i].priority;
 
-	return -1;
+    return -1;
 }
 
 __attribute__((nonnull))
 static void free_entries(struct entry *entries)
 {
-	for(struct entry *next, *tmp = entries; tmp;)
-	{
-		next = tmp->next;
+    for(struct entry *next, *tmp = entries; tmp;)
+    {
+        next = tmp->next;
 
-		switch (tmp->type)
-		{
-			case TYPE_FILE:
-				free(tmp->target.file.name);
-				break;
-			case TYPE_REMOTE:
-				free(tmp->target.remote.name);
-				break;
-			case TYPE_USER:
-				/* TODO */
-				break;
-			case TYPE_OTHER:
-				tmp->target.other = NULL;
-				break;
-			default:
-				errx(EXIT_FAILURE, "unknown TYPE %d", tmp->type);
-		}
+        switch (tmp->type)
+        {
+            case TYPE_FILE:
+                free(tmp->target.file.name);
+                break;
+            case TYPE_REMOTE:
+                free(tmp->target.remote.name);
+                break;
+            case TYPE_USER:
+                /* TODO */
+                break;
+            case TYPE_OTHER:
+                tmp->target.other = NULL;
+                break;
+            default:
+                errx(EXIT_FAILURE, "unknown TYPE %d", tmp->type);
+        }
 
-		free(tmp);
-		tmp = next;
-	}
+        free(tmp);
+        tmp = next;
+    }
 }
 
 static void clean_pid(void)
 {
-	if (unlink("/tmp/syslog.pid") == -1)
-		warn("unlink: syslog.pid");
+    if (unlink("/tmp/syslog.pid") == -1)
+        warn("unlink: syslog.pid");
 }
 
 #ifdef ENABLE_INET
@@ -465,74 +465,74 @@ static void clean_remote(void)
 
 static void clean_log_fd(void)
 {
-	if (log_fd != -1) {
+    if (log_fd != -1) {
         if (opt_debug) printf("DEBUG: clean_remote: closing log_fd\n");
-		close(log_fd);
-		unlink(opt_mainsock);
-		log_fd = -1;
-	}
+        close(log_fd);
+        unlink(opt_mainsock);
+        log_fd = -1;
+    }
 }
 
 static void sig_sigalrm(int sig, siginfo_t *info __attribute__((unused)), void *ucontext __attribute__((unused)))
 {
-	if (sig == SIGALRM) {
-		if (opt_interval) {
-			last_mark = time(NULL);
-			alarm(opt_interval * 60);
-		} else {
-			/* ??? */
-		}
-	}
+    if (sig == SIGALRM) {
+        if (opt_interval) {
+            last_mark = time(NULL);
+            alarm(opt_interval * 60);
+        } else {
+            /* ??? */
+        }
+    }
 }
 
 static void sig_sigchld(int sig, siginfo_t *info, void *ucontext __attribute__((unused)))
 {
-	int wstatus;
+    int wstatus;
 
-	if (sig == SIGCHLD)
-		waitpid(info->si_pid, &wstatus, WNOHANG);
+    if (sig == SIGCHLD)
+        waitpid(info->si_pid, &wstatus, WNOHANG);
 }
 
 static void sig_sigint(int sig, siginfo_t *info __attribute__((unused)), void *ucontext __attribute__((unused)))
 {
     if (opt_debug) printf("DEBUG: sigint: sig=%d\n", sig);
 
-	if (sig == SIGINT)
-		running = false;
+    if (sig == SIGINT)
+        running = false;
 }
 
 static void setup_signals(void)
 {
-	sigset_t set, oldset;
+    sigset_t set, oldset;
 
-	sigfillset(&set);
-	sigdelset(&set, SIGALRM);
-	sigdelset(&set, SIGINT);
-	sigdelset(&set, SIGQUIT);
-	sigdelset(&set, SIGTERM);
-	sigdelset(&set, SIGTERM);
-	sigdelset(&set, SIGUSR1);
+    sigfillset(&set);
+    sigdelset(&set, SIGALRM);
+    sigdelset(&set, SIGINT);
+    sigdelset(&set, SIGQUIT);
+    sigdelset(&set, SIGTERM);
+    sigdelset(&set, SIGTERM);
+    sigdelset(&set, SIGUSR1);
 
-	if (sigprocmask(SIG_BLOCK, &set, &oldset) == -1)
-		warn("sigprocmask");
+    if (sigprocmask(SIG_BLOCK, &set, &oldset) == -1)
+        warn("sigprocmask");
 
-	const struct sigaction sigactions[] = {
-		[SIGALRM] = { .sa_sigaction = sig_sigalrm, .sa_flags = SA_SIGINFO },
-		[SIGCHLD] = { .sa_sigaction = sig_sigchld, .sa_flags = SA_SIGINFO },
-		[SIGINT]  = { .sa_sigaction = sig_sigint,  .sa_flags = SA_SIGINFO },
-		[SIGQUIT] = { .sa_handler   = SIG_DFL                             },
-		[SIGTERM] = { .sa_handler   = SIG_DFL                             },
-		[SIGUSR1] = { .sa_handler   = SIG_DFL                             },
-	};
+    const struct sigaction sigactions[] = {
+        [SIGALRM] = { .sa_sigaction = sig_sigalrm, .sa_flags = SA_SIGINFO },
+        [SIGCHLD] = { .sa_sigaction = sig_sigchld, .sa_flags = SA_SIGINFO },
+        [SIGINT]  = { .sa_sigaction = sig_sigint,  .sa_flags = SA_SIGINFO },
+        [SIGQUIT] = { .sa_handler   = SIG_DFL                             },
+        [SIGTERM] = { .sa_handler   = SIG_DFL                             },
+        [SIGUSR1] = { .sa_handler   = SIG_DFL                             },
+    };
 
-	const int sigactions_size = sizeof(sigactions) / sizeof(struct sigaction);
+    const int sigactions_size = sizeof(sigactions) / sizeof(struct sigaction);
 
-	for (int i = 0; i < sigactions_size; i++)
-	{
-		if (sigactions[i].sa_sigaction || sigactions[i].sa_flags)
-			if (sigaction(i, &sigactions[i], NULL) == -1)
-				warn("sigaction");
-	}
+    for (int i = 0; i < sigactions_size; i++)
+    {
+        if (sigactions[i].sa_sigaction || sigactions[i].sa_flags)
+            if (sigaction(i, &sigactions[i], NULL) == -1)
+                warn("sigaction");
+    }
 }
 
 static inline void nonblock(int fd)
@@ -543,24 +543,24 @@ static inline void nonblock(int fd)
 __attribute__((nonnull, warn_unused_result))
 static int setup_unix_socket(const char *path)
 {
-	int ret = -1;
+    int ret = -1;
 
-	struct sockaddr_un sun_log;
+    struct sockaddr_un sun_log;
 
-	memset(&sun_log, 0, sizeof(sun_log));
-	sun_log.sun_family = AF_UNIX;
-	strcpy(sun_log.sun_path, path /*opt_mainsock*/);
-	unlink(sun_log.sun_path);
+    memset(&sun_log, 0, sizeof(sun_log));
+    sun_log.sun_family = AF_UNIX;
+    strcpy(sun_log.sun_path, path /*opt_mainsock*/);
+    unlink(sun_log.sun_path);
 
-	if ((ret = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1)
-		err(EXIT_FAILURE, "socket");
+    if ((ret = socket(AF_UNIX, SOCK_DGRAM, 0)) == -1)
+        err(EXIT_FAILURE, "socket");
 
     nonblock(ret);
 
-	if (bind(ret, (const struct sockaddr *)&sun_log, sizeof(sun_log)) == -1)
-		err(EXIT_FAILURE, "bind");
+    if (bind(ret, (const struct sockaddr *)&sun_log, sizeof(sun_log)) == -1)
+        err(EXIT_FAILURE, "bind");
 
-	chmod(sun_log.sun_path, 0666);
+    chmod(sun_log.sun_path, 0666);
 
     return ret;
 }
@@ -590,7 +590,7 @@ static int setup_ip_socket(int port, int type)
         if (listen(ret, 5) == -1)
             err(EXIT_FAILURE, "setup_ip_socket: listen");
     }
-    
+
     return ret;
 }
 #endif
@@ -598,341 +598,341 @@ static int setup_ip_socket(int port, int type)
 __attribute__((nonnull))
 static struct entry *find_match(struct entry *entries, int fac, int pri, bool any __attribute__((unused)))
 {
-	bool found;
+    bool found;
 
-	struct entry    *ent;
-	struct selector *sel;
+    struct entry    *ent;
+    struct selector *sel;
 
-	ent = entries;
+    ent = entries;
 
-	while (ent)
-	{
-		found = false;
+    while (ent)
+    {
+        found = false;
 
-		for (int i = 0; i < ent->num_sel; i++)
-		{
-			sel = &ent->selectors[i];
+        for (int i = 0; i < ent->num_sel; i++)
+        {
+            sel = &ent->selectors[i];
 
-			if (!(sel->priority & (1 << pri)))
-				continue;
-			if (!(sel->facility & (1 << fac)))
-				continue;
+            if (!(sel->priority & (1 << pri)))
+                continue;
+            if (!(sel->facility & (1 << fac)))
+                continue;
 
-			found = true;
+            found = true;
 
-			/* TODO check this logic works for 'any' and 'none' */
-		}
+            /* TODO check this logic works for 'any' and 'none' */
+        }
 
-		if (found)
-			return ent;
+        if (found)
+            return ent;
 
-		ent = ent->next;
-	}
+        ent = ent->next;
+    }
 
-	return NULL;
+    return NULL;
 }
 
 __attribute__((nonnull(1,2,4)))
 static int process_record(
-		struct entry *entries,
-		char         *string,
-		format_t      format,
-		const char   *sender
+        struct entry *entries,
+        char         *string,
+        format_t      format,
+        const char   *sender
 #ifdef ENABLE_INET
-		,
-		const void   *proto_specific,
-		       int    family
+        ,
+        const void   *proto_specific,
+               int    family
 #endif
-			   )
+               )
 {
-	char  *ptr;
-	int    facility, priority, rc, errval;
-	time_t now, event;
-	char   hostname[64 + 1];
+    char  *ptr;
+    int    facility, priority, rc, errval;
+    time_t now, event;
+    char   hostname[64 + 1];
 
-	struct entry *match, *start;
-	struct record *record;
+    struct entry *match, *start;
+    struct record *record;
 
-	errval = EINVAL;
+    errval = EINVAL;
 
-	if (opt_debug) printf("DEBUG: process_record(%p, <>)\n", entries);
+    if (opt_debug) printf("DEBUG: process_record(%p, <>)\n", entries);
 
-	now      = time(NULL);
-	ptr      = string;
-	facility = LOG_USER;
-	priority = LOG_NOTICE;
-	record   = NULL;
+    now      = time(NULL);
+    ptr      = string;
+    facility = LOG_USER;
+    priority = LOG_NOTICE;
+    record   = NULL;
 
-	gethostname(hostname, sizeof(hostname));
+    gethostname(hostname, sizeof(hostname));
 
-	if (*ptr == '<') {
-		unsigned int tmp;
+    if (*ptr == '<') {
+        unsigned int tmp;
 
-		/* Linux defines PRIMASK as 0x7 ((1<<3)-1) and FACMASK as 0x03f8 */
+        /* Linux defines PRIMASK as 0x7 ((1<<3)-1) and FACMASK as 0x03f8 */
 
-		if (sscanf(ptr, "<%u>", &tmp) == 1) {
-			facility = (tmp & ~0x0007);
-			priority = (tmp &  0x0007);
-		}
+        if (sscanf(ptr, "<%u>", &tmp) == 1) {
+            facility = (tmp & ~0x0007);
+            priority = (tmp &  0x0007);
+        }
 
-		while (*ptr && *ptr != '>') 
-			ptr++;
+        while (*ptr && *ptr != '>')
+            ptr++;
 
-		if (*ptr) 
-			ptr++;
-	} else {
+        if (*ptr)
+            ptr++;
+    } else {
         warnx("process_record: malformed line (HEADER.PRI): <%s>", string);
-		goto bad_fmt;
-	}
+        goto bad_fmt;
+    }
 
-	if ((record = calloc(1, sizeof(struct record))) == NULL)
-		err(EXIT_FAILURE, "process_record: calloc(record)");
+    if ((record = calloc(1, sizeof(struct record))) == NULL)
+        err(EXIT_FAILURE, "process_record: calloc(record)");
 
-	record->facility = facility;
-	record->priority = priority;
-	record->sender   = strdup(sender);
+    record->facility = facility;
+    record->priority = priority;
+    record->sender   = strdup(sender);
 
 #ifdef ENABLE_INET
-	if (family == AF_INET && proto_specific)
-		record->src_ip = *(struct in_addr *)proto_specific;
-	else
-		record->src_ip.s_addr = 0;
+    if (family == AF_INET && proto_specific)
+        record->src_ip = *(struct in_addr *)proto_specific;
+    else
+        record->src_ip.s_addr = 0;
 #endif
 
     /* mmm dd HH:MM:SS (.+:)? .* */
     if (format != TYPE_RFC5424) {
-		/* TODO confirm LOCAL vs RFC3542 */
-		record->type = TYPE_RFC3164;
+        /* TODO confirm LOCAL vs RFC3542 */
+        record->type = TYPE_RFC3164;
 
-		char   *tmp;
+        char   *tmp;
 
-        if (!(ptr[3] == ' ' && ptr[6] == ' ' && ptr[9] == ':' 
+        if (!(ptr[3] == ' ' && ptr[6] == ' ' && ptr[9] == ':'
                     && ptr[12] == ':' && ptr[15] == ' ')) {
-			gettimeofday(&record->tv, NULL);
-		} else {
-			struct tm tm, *local_tm;
+            gettimeofday(&record->tv, NULL);
+        } else {
+            struct tm tm, *local_tm;
 
-			local_tm = localtime(&now);
-			memcpy(&tm, local_tm, sizeof(struct tm));
+            local_tm = localtime(&now);
+            memcpy(&tm, local_tm, sizeof(struct tm));
 
-			if ((tmp = strptime(ptr, "%b %e %H:%M:%S ", &tm)) != NULL) {
-				event = mktime(&tm);
-				record->tv.tv_sec = event;
-				record->tv.tv_usec = 0;
-				ptr = tmp;
-			} else {
-				gettimeofday(&record->tv, NULL);
-			}
-		}
+            if ((tmp = strptime(ptr, "%b %e %H:%M:%S ", &tm)) != NULL) {
+                event = mktime(&tm);
+                record->tv.tv_sec = event;
+                record->tv.tv_usec = 0;
+                ptr = tmp;
+            } else {
+                gettimeofday(&record->tv, NULL);
+            }
+        }
 
-		char *appname, *pid;
-		char  dummy1, dummy2;
+        char *appname, *pid;
+        char  dummy1, dummy2;
 
-		appname = NULL;
-		pid = NULL;
+        appname = NULL;
+        pid = NULL;
 
-		/* using a while(*ptr++) type approach might be better here? */
-		if ((rc = sscanf(ptr, "%m[-_A-Z0-9a-z][%m[0-9]]%c%c", &appname, &pid, &dummy1, &dummy2)) == 4 
-				&& dummy1 == ':' && dummy2 == ' ') {
-			record->appname = appname;
-			record->procid = pid;
-			ptr = strchr(ptr, ':');
-			ptr+= 2;
-		} else {
-			if (appname)
-				free(appname);
+        /* using a while(*ptr++) type approach might be better here? */
+        if ((rc = sscanf(ptr, "%m[-_A-Z0-9a-z][%m[0-9]]%c%c", &appname, &pid, &dummy1, &dummy2)) == 4
+                && dummy1 == ':' && dummy2 == ' ') {
+            record->appname = appname;
+            record->procid = pid;
+            ptr = strchr(ptr, ':');
+            ptr+= 2;
+        } else {
+            if (appname)
+                free(appname);
 
-			if (pid)
-				free(pid);
+            if (pid)
+                free(pid);
 
-			if ((rc = sscanf(ptr, "%m[-_A-Z0-9a-z]%c%c", &appname, &dummy1, &dummy2)) == 3
-					&& dummy1 == ':' && dummy2 == ' ') {
-				record->appname = appname;
-				ptr = strchr(ptr, ':');
-				ptr+= 2;
-			} else if (appname) {
-				free(appname);
-			}
-		}
+            if ((rc = sscanf(ptr, "%m[-_A-Z0-9a-z]%c%c", &appname, &dummy1, &dummy2)) == 3
+                    && dummy1 == ':' && dummy2 == ' ') {
+                record->appname = appname;
+                ptr = strchr(ptr, ':');
+                ptr+= 2;
+            } else if (appname) {
+                free(appname);
+            }
+        }
 
-		if ((record->hostname = strdup(hostname)) == NULL)
-			err(EXIT_FAILURE, "process_record: strdup(hostname)");
+        if ((record->hostname = strdup(hostname)) == NULL)
+            err(EXIT_FAILURE, "process_record: strdup(hostname)");
 
-		if ((record->msg = strdup(ptr)) == NULL)
-			err(EXIT_FAILURE, "process_record: strdup(ptr)");
+        if ((record->msg = strdup(ptr)) == NULL)
+            err(EXIT_FAILURE, "process_record: strdup(ptr)");
 
-		if (opt_debug) {
-			printf("DEBUG: process_record: TYPE_RFC3164: ");
-			print_record(stdout, record);
-			printf("\n");
-		}
+        if (opt_debug) {
+            printf("DEBUG: process_record: TYPE_RFC3164: ");
+            print_record(stdout, record);
+            printf("\n");
+        }
 
-	} else { 
-		/* RFC5424 formatted */
-		record->type = TYPE_RFC5424;
+    } else {
+        /* RFC5424 formatted */
+        record->type = TYPE_RFC5424;
 
-		char *date, *data, *tok;
+        char *date, *data, *tok;
 
-		char       tmp[BUFSIZ];
-		regmatch_t pmatch[12];
-		long       version;
-		char      *endptr;
+        char       tmp[BUFSIZ];
+        regmatch_t pmatch[12];
+        long       version;
+        char      *endptr;
 
-		if ((tok = strtok(ptr, " ")) == NULL) 
-			goto bad_fmt;
+        if ((tok = strtok(ptr, " ")) == NULL)
+            goto bad_fmt;
 
-		errno = 0;
-		version = strtol(tok, &endptr, 10);
+        errno = 0;
+        version = strtol(tok, &endptr, 10);
 
-		if ( (version == 0 && endptr == tok) ||
-				(version == LONG_MIN && errno == ERANGE) ||
-				(version == LONG_MAX && errno == ERANGE) ) {
-			warnx("process_record: HEADER.VERSION is not a number");
-			goto bad_fmt;
-		}
+        if ( (version == 0 && endptr == tok) ||
+                (version == LONG_MIN && errno == ERANGE) ||
+                (version == LONG_MAX && errno == ERANGE) ) {
+            warnx("process_record: HEADER.VERSION is not a number");
+            goto bad_fmt;
+        }
 
-		if (version != 1L) {
-			warnx("process_record: HEADER.VERSION invalid: <%ld>", version);
-			goto bad_fmt;
-		}
+        if (version != 1L) {
+            warnx("process_record: HEADER.VERSION invalid: <%ld>", version);
+            goto bad_fmt;
+        }
 
-		record->version = version;
+        record->version = version;
 
-		if ((tok = strtok(NULL, " ")) == NULL) 
-			goto bad_fmt;
+        if ((tok = strtok(NULL, " ")) == NULL)
+            goto bad_fmt;
 
-		if ((date = strdup(tok)) == NULL)
-			err(EXIT_FAILURE, "process_record: strdup(date)");
+        if ((date = strdup(tok)) == NULL)
+            err(EXIT_FAILURE, "process_record: strdup(date)");
 
-		if (regexec(&rfc5242_tz, date, sizeof(pmatch)/sizeof(regmatch_t), pmatch, 0) == 0) {
-			struct tm tm;
-			int ms;
+        if (regexec(&rfc5242_tz, date, sizeof(pmatch)/sizeof(regmatch_t), pmatch, 0) == 0) {
+            struct tm tm;
+            int ms;
 
-			sscanf(date, "%04u-%02u-%02uT%02u:%02u:%02u.%u",
-					&tm.tm_year,
-					&tm.tm_mon,
-					&tm.tm_mday,
-					&tm.tm_hour,
-					&tm.tm_min,
-					&tm.tm_sec,
-					&ms);
+            sscanf(date, "%04u-%02u-%02uT%02u:%02u:%02u.%u",
+                    &tm.tm_year,
+                    &tm.tm_mon,
+                    &tm.tm_mday,
+                    &tm.tm_hour,
+                    &tm.tm_min,
+                    &tm.tm_sec,
+                    &ms);
 
-			tm.tm_year -= 1900;
-			tm.tm_mon -= 1;
+            tm.tm_year -= 1900;
+            tm.tm_mon -= 1;
 
-			event = mktime(&tm);
+            event = mktime(&tm);
 
-			if (pmatch[10].rm_so && pmatch[10].rm_eo) {
-				int len =  pmatch[10].rm_eo - pmatch[10].rm_so;
-				char c;
-				int hr, min;
+            if (pmatch[10].rm_so && pmatch[10].rm_eo) {
+                int len =  pmatch[10].rm_eo - pmatch[10].rm_so;
+                char c;
+                int hr, min;
 
                 memset(tmp, 0, len);
-				strncat(tmp, date + pmatch[10].rm_so, len);
-				sscanf(tmp, "%c%02u:%02u", &c, &hr, &min); /* TODO error */
+                strncat(tmp, date + pmatch[10].rm_so, len);
+                sscanf(tmp, "%c%02u:%02u", &c, &hr, &min); /* TODO error */
 
-				min += (hr * 60);
-				if (c == '-')
-					min = -min;
+                min += (hr * 60);
+                if (c == '-')
+                    min = -min;
 
-				event -= (min * 60);
-			} 
+                event -= (min * 60);
+            }
 
-			record->tv.tv_sec = event;
-			record->tv.tv_usec = ms;
+            record->tv.tv_sec = event;
+            record->tv.tv_usec = ms;
 
-			free(date);
+            free(date);
         } else {
             warnx("process_record: HEADER.TIMESTAMP: regexec failed date=<%s>\n", date);
-			free(date);
+            free(date);
 
-			goto bad_fmt;
-		}
+            goto bad_fmt;
+        }
 
-        if ((tok = strtok(NULL, " ")) == NULL) 
-			goto bad_fmt;
+        if ((tok = strtok(NULL, " ")) == NULL)
+            goto bad_fmt;
 
-		if (*tok && strcmp(tok, "-"))
-			if ((record->hostname = strdup(tok)) == NULL)
-				err(EXIT_FAILURE, "process_record: strdup(hostname)");
+        if (*tok && strcmp(tok, "-"))
+            if ((record->hostname = strdup(tok)) == NULL)
+                err(EXIT_FAILURE, "process_record: strdup(hostname)");
 
-        if ((tok = strtok(NULL, " ")) == NULL) 
-			goto bad_fmt;
+        if ((tok = strtok(NULL, " ")) == NULL)
+            goto bad_fmt;
 
-		if (*tok && strcmp(tok, "-"))
-			if ((record->appname = strdup(tok)) == NULL)
-				err(EXIT_FAILURE, "process_record: strdup(appname)");
+        if (*tok && strcmp(tok, "-"))
+            if ((record->appname = strdup(tok)) == NULL)
+                err(EXIT_FAILURE, "process_record: strdup(appname)");
 
-		if ((tok = strtok(NULL, " ")) == NULL) 
-			goto bad_fmt;
+        if ((tok = strtok(NULL, " ")) == NULL)
+            goto bad_fmt;
 
-		if (*tok && strcmp(tok, "-"))
-			if ((record->procid = strdup(tok)) == NULL)
-				err(EXIT_FAILURE, "process_record: strdup(procid)");
+        if (*tok && strcmp(tok, "-"))
+            if ((record->procid = strdup(tok)) == NULL)
+                err(EXIT_FAILURE, "process_record: strdup(procid)");
 
-		if ((tok = strtok(NULL, " ")) == NULL) 
-			goto bad_fmt;
+        if ((tok = strtok(NULL, " ")) == NULL)
+            goto bad_fmt;
 
-		if (*tok && strcmp(tok, "-"))
-			if ((record->msgid = strdup(tok)) == NULL)
-				err(EXIT_FAILURE, "process_record: strdup(msgid)");
+        if (*tok && strcmp(tok, "-"))
+            if ((record->msgid = strdup(tok)) == NULL)
+                err(EXIT_FAILURE, "process_record: strdup(msgid)");
 
-		/* TODO handle the case STRUCTURED-DATA is "-" */
-		if ((tok = strtok(NULL, "]")) == NULL) 
-			goto bad_fmt;
-        if (*(tok++) != '[') 
-			goto bad_fmt;
+        /* TODO handle the case STRUCTURED-DATA is "-" */
+        if ((tok = strtok(NULL, "]")) == NULL)
+            goto bad_fmt;
+        if (*(tok++) != '[')
+            goto bad_fmt;
 
         if ((data = strdup(tok)) == NULL)
-			err(EXIT_FAILURE, "process_record: strdup(data)");
+            err(EXIT_FAILURE, "process_record: strdup(data)");
 
-		/* TODO process STRUCTURED-DATA */
+        /* TODO process STRUCTURED-DATA */
 
         free(data);
 
         if ((tok = strtok(NULL, "\0")) != NULL && *tok != '\0') {
-            if (*(tok++) != ' ') 
-				goto bad_fmt;
+            if (*(tok++) != ' ')
+                goto bad_fmt;
 
             if ((record->msg = strdup(tok)) == NULL)
-				err(EXIT_FAILURE, "process_record: strdup(hostname)");
+                err(EXIT_FAILURE, "process_record: strdup(hostname)");
         } else
             record->msg = NULL;
 
     }
 
-	/* send the now well-formed record to all targets */
-	start = entries;
-	do
-	{
+    /* send the now well-formed record to all targets */
+    start = entries;
+    do
+    {
         if ((match = find_match(start, facility, priority, false)) == NULL
-			/* TODO && (match = find_match(start, facility, priority, true)) == NULL */
+            /* TODO && (match = find_match(start, facility, priority, true)) == NULL */
            ) {
-			errval = ESRCH;
-			goto bad;
-		}
+            errval = ESRCH;
+            goto bad;
+        }
 
-        if (opt_debug) 
-            printf("DEBUG: process_record: target=[%s]<%s>\n", 
+        if (opt_debug)
+            printf("DEBUG: process_record: target=[%s]<%s>\n",
                     target_type[match->type],
                     (match->type == TYPE_FILE) ? match->target.file.name : "");
 
-		start = match->next;
+        start = match->next;
 
-		/* TODO check record.msg is set! */
+        /* TODO check record.msg is set! */
         send_log(match, record);
     } while(match && start);
 
-	if (record)
-		free_record(record);
+    if (record)
+        free_record(record);
 
     return 0;
 
 bad_fmt:
     warnx("process_record: bad format in record");
 bad:
-	if (record)
-		free_record(record);
+    if (record)
+        free_record(record);
 
     return -errval;
 }
@@ -993,10 +993,10 @@ static void main_loop(struct entry *entries)
             socklen_t so_type_len;
             int       so_type;
 
-#ifdef ENABLE_INET	
+#ifdef ENABLE_INET
             struct sockaddr_in sa_in;
 #else
-			struct sockaddr sa_in;
+            struct sockaddr sa_in;
 #endif
 
             if (fds[i] == -1)
@@ -1021,39 +1021,39 @@ static void main_loop(struct entry *entries)
             if (FD_ISSET(fds[i], &input_fd)) {
                 const char *name;
 #ifdef ENABLE_INET
-				const void *proto_specific;
+                const void *proto_specific;
 #endif
                 format_t    format;
-				int         family;
+                int         family;
 
-				name = NULL;
+                name = NULL;
 #ifdef ENABLE_INET
-				proto_specific = NULL;
+                proto_specific = NULL;
 #endif
-				family = ((struct sockaddr *)&sa_in)->sa_family;
+                family = ((struct sockaddr *)&sa_in)->sa_family;
 
 #ifdef ENABLE_INET
                 if (family == AF_INET && so_type == SOCK_DGRAM) {
                     sin_len = sizeof(sa_in);
 
-                    rc = recvfrom(remote_fd, buf, sizeof(buf) - 1, 0, 
+                    rc = recvfrom(remote_fd, buf, sizeof(buf) - 1, 0,
                             (struct sockaddr *)&sa_in, &sin_len);
 
                     format = TYPE_RFC5424;
 
-					if (rc != -1) {
-						name           = inet_ntoa(sa_in.sin_addr);
-						proto_specific = &sa_in.sin_addr;
-					}
-                } else 
+                    if (rc != -1) {
+                        name           = inet_ntoa(sa_in.sin_addr);
+                        proto_specific = &sa_in.sin_addr;
+                    }
+                } else
 #endif
-					if (family == AF_UNIX && so_type == SOCK_DGRAM) {
+                    if (family == AF_UNIX && so_type == SOCK_DGRAM) {
                     rc = read(log_fd, buf, sizeof(buf) - 1);
                     format         = TYPE_LOCAL;
 
                     name           = "-";
 #ifdef ENABLE_INET
-					proto_specific = NULL;
+                    proto_specific = NULL;
 #endif
                 } else {
                     /* TODO should this error? */
@@ -1077,16 +1077,16 @@ static void main_loop(struct entry *entries)
                 /* find the first non-null/non newline, and append a newline */
                 rc--;
 
-                while(rc && (buf[rc] == '\0' || buf[rc] == '\n')) 
+                while(rc && (buf[rc] == '\0' || buf[rc] == '\n'))
                     rc--;
 
                 buf[++rc] = '\0';
 
                 process_record(entries, buf, format, name
 #ifdef ENABLE_INET
-						, proto_specific, family
+                        , proto_specific, family
 #endif
-						);
+                        );
             }
         }
 
@@ -1262,7 +1262,7 @@ static struct entry *process_line(char *one, const char *two)
 
     /* process each selector */
 
-    for (int i = 0; i < sel_cnt; i++ ) 
+    for (int i = 0; i < sel_cnt; i++ )
     {
         if (!strchr(selectors[i], '.')) {
             warnx("invalid selector: <%s>", selectors[i]);
@@ -1363,7 +1363,7 @@ static struct entry *process_line(char *one, const char *two)
         ent->selectors[i].priority = priority;
         ent->selectors[i].facility = fac;
 skip:
-	;
+    ;
     }
 
     free(selectors);
@@ -1413,247 +1413,247 @@ static struct entry *parse_config(FILE *fp)
 
         /* handle real lines */
         if (!regexec(&main_line, linebuf, 3, pmatch, 0)) {
-			char *one, *two;
+            char *one, *two;
 
-			one = strndup(linebuf + pmatch[1].rm_so, pmatch[1].rm_eo - pmatch[1].rm_so);
-			two = strndup(linebuf + pmatch[2].rm_so, pmatch[2].rm_eo - pmatch[2].rm_so);
+            one = strndup(linebuf + pmatch[1].rm_so, pmatch[1].rm_eo - pmatch[1].rm_so);
+            two = strndup(linebuf + pmatch[2].rm_so, pmatch[2].rm_eo - pmatch[2].rm_so);
 
-			if (one == NULL || two == NULL)
-				err(EXIT_FAILURE, "strndup");
+            if (one == NULL || two == NULL)
+                err(EXIT_FAILURE, "strndup");
 
-			struct entry *tmp = process_line(one, two);
+            struct entry *tmp = process_line(one, two);
 
-			if (ret) 
-				tmp->next = ret;
-			ret = tmp;
+            if (ret)
+                tmp->next = ret;
+            ret = tmp;
 
-			free(one);
-			free(two);
+            free(one);
+            free(two);
 
-			goto reset;
-		}
+            goto reset;
+        }
 
-		warnx("parse_config: illegal line: <%s>", linebuf);
+        warnx("parse_config: illegal line: <%s>", linebuf);
 
 reset:
-		/* reset buffers etc. for another process */
+        /* reset buffers etc. for another process */
 
-		memset(linebuf, 0, sizeof(linebuf));
-		bufsiz = sizeof(linebuf) - 1;
-		bufptr = linebuf;
-		continue;
+        memset(linebuf, 0, sizeof(linebuf));
+        bufsiz = sizeof(linebuf) - 1;
+        bufptr = linebuf;
+        continue;
 
-	} /* file read loop*/
+    } /* file read loop*/
 
-	return ret;
+    return ret;
 }
 
 /* consolidate duplicate targets to single instances */
 __attribute__((nonnull))
 static void check_dupes(struct entry *ents)
 {
-	struct entry *cur;
+    struct entry *cur;
 
-	cur = ents;
+    cur = ents;
 
-	while (cur)
-	{
-		if (cur->type == TYPE_OTHER)
-			goto skip;
+    while (cur)
+    {
+        if (cur->type == TYPE_OTHER)
+            goto skip;
 
-		for (struct entry *tmp = cur->next; tmp; tmp = tmp->next)
-		{
-			if (tmp->type != cur->type)
-				continue;
+        for (struct entry *tmp = cur->next; tmp; tmp = tmp->next)
+        {
+            if (tmp->type != cur->type)
+                continue;
 
-			switch (tmp->type)
-			{
-				case TYPE_FILE:
-					if (strcmp(cur->target.file.name, tmp->target.file.name))
-						continue;
+            switch (tmp->type)
+            {
+                case TYPE_FILE:
+                    if (strcmp(cur->target.file.name, tmp->target.file.name))
+                        continue;
                     free(tmp->target.file.name);
                     tmp->target.file.name = NULL;
-					break;
+                    break;
 
-				case TYPE_OTHER:
-					continue;
+                case TYPE_OTHER:
+                    continue;
 
                 case TYPE_USER:
-					/* TODO */
-					continue;
+                    /* TODO */
+                    continue;
 
                 case TYPE_REMOTE:
-					if (cur->target.remote.protocol != tmp->target.remote.protocol)
-						continue;
-					if (strcmp(cur->target.remote.name, tmp->target.remote.name))
-						continue;
+                    if (cur->target.remote.protocol != tmp->target.remote.protocol)
+                        continue;
+                    if (strcmp(cur->target.remote.name, tmp->target.remote.name))
+                        continue;
 
                     free(tmp->target.remote.name);
                     tmp->target.remote.name = NULL;
-					break;
+                    break;
 
                 default:
-					warn("unknown TYPE in check_dupes");
-					continue;
-			}
+                    warn("unknown TYPE in check_dupes");
+                    continue;
+            }
 
-			if (opt_debug) printf("DEBUG: check_dupes: de-duplicating\n");
+            if (opt_debug) printf("DEBUG: check_dupes: de-duplicating\n");
 
-			/* must have a match */
-			tmp->type = TYPE_OTHER;
-			tmp->target.other = cur;
-		}
+            /* must have a match */
+            tmp->type = TYPE_OTHER;
+            tmp->target.other = cur;
+        }
 skip:
-		cur = cur->next;
-	}
+        cur = cur->next;
+    }
 }
 
 static void show_version(void)
 {
-	printf("fail-syslogd version " VERSION "\n");
+    printf("fail-syslogd version " VERSION "\n");
 }
 
 static void show_usage(void)
 {
-	printf("Usage: fail-syslogd [OPTION]...\n\n"
-			" -d  debug\n"
-			" -h  help\n"
-			" -H  forward\n"
-			" -n  foreground\n"
-			" -r  remote\n"
-			" -S  verbose\n"
-			" -v  version\n"
-			" -x  disable DNS\n"
-			" -a socket\n"
-			" -f config_file\n"
-			" -l hostlist\n"
-			" -m interval\n"
-			" -p socket\n"
-			" -s domainlist\n");
+    printf("Usage: fail-syslogd [OPTION]...\n\n"
+            " -d  debug\n"
+            " -h  help\n"
+            " -H  forward\n"
+            " -n  foreground\n"
+            " -r  remote\n"
+            " -S  verbose\n"
+            " -v  version\n"
+            " -x  disable DNS\n"
+            " -a socket\n"
+            " -f config_file\n"
+            " -l hostlist\n"
+            " -m interval\n"
+            " -p socket\n"
+            " -s domainlist\n");
 }
 
 static void init_regex(void)
 {
-	int rc;
-	char  errbuf[BUFSIZ];
+    int rc;
+    char  errbuf[BUFSIZ];
 
-	if ((rc = regcomp(&main_line, main_line_re, REG_EXTENDED|REG_ICASE)) != 0) {
-		regerror(rc, &main_line, errbuf, sizeof(errbuf));
-		errx(EXIT_FAILURE, "regcomp: main_line: %s", errbuf);
-	}
+    if ((rc = regcomp(&main_line, main_line_re, REG_EXTENDED|REG_ICASE)) != 0) {
+        regerror(rc, &main_line, errbuf, sizeof(errbuf));
+        errx(EXIT_FAILURE, "regcomp: main_line: %s", errbuf);
+    }
 
-	if ((rc = regcomp(&comment_line, comment_line_re, REG_EXTENDED|REG_ICASE)) != 0) {
-		regerror(rc, &comment_line, errbuf, sizeof(errbuf));
-		errx(EXIT_FAILURE, "regcomp: comment_line: %s", errbuf);
-	}
+    if ((rc = regcomp(&comment_line, comment_line_re, REG_EXTENDED|REG_ICASE)) != 0) {
+        regerror(rc, &comment_line, errbuf, sizeof(errbuf));
+        errx(EXIT_FAILURE, "regcomp: comment_line: %s", errbuf);
+    }
 
     if ((rc = regcomp(&rfc5242_tz, rfc5242_tz_re, REG_EXTENDED)) != 0) {
         regerror(rc, &rfc5242_tz, errbuf, sizeof(errbuf));
-		errx(EXIT_FAILURE, "regcomp: rfc5242_tz: %s", errbuf);
+        errx(EXIT_FAILURE, "regcomp: rfc5242_tz: %s", errbuf);
     }
 
 }
 
 int main(int argc, char *argv[])
 {
-	opt_mainsock = default_mainsock;
-	opt_config   = default_config;
+    opt_mainsock = default_mainsock;
+    opt_config   = default_config;
 
-	{
-		int opt;
-		while ((opt = getopt(argc, argv, "dhHnrSvxa:f:l:m:p:s:")) != -1)
-		{
-			switch (opt)
-			{
-				case 'd': opt_debug = true;       
-						  /* fall-through */
-				case 'n': opt_background = false; break;
-				case 'H': opt_forward = true;     break;
-				case 'r': opt_remote = true;      break;
-				case 'S': opt_verbose++;          break;
-				case 'x': opt_rdns = false;       break;
+    {
+        int opt;
+        while ((opt = getopt(argc, argv, "dhHnrSvxa:f:l:m:p:s:")) != -1)
+        {
+            switch (opt)
+            {
+                case 'd': opt_debug = true;
+                          /* fall-through */
+                case 'n': opt_background = false; break;
+                case 'H': opt_forward = true;     break;
+                case 'r': opt_remote = true;      break;
+                case 'S': opt_verbose++;          break;
+                case 'x': opt_rdns = false;       break;
 
-				case 'a': {
-						  }
-						  break;
-				case 'f': opt_config = optarg;         break;
-				case 'l': opt_hostlist = optarg;       break;
-				case 'm': opt_interval = atoi(optarg); break;
-				case 's': opt_domainlist = optarg;     break;
-				case 'p': opt_mainsock = optarg;       break;
+                case 'a': {
+                          }
+                          break;
+                case 'f': opt_config = optarg;         break;
+                case 'l': opt_hostlist = optarg;       break;
+                case 'm': opt_interval = atoi(optarg); break;
+                case 's': opt_domainlist = optarg;     break;
+                case 'p': opt_mainsock = optarg;       break;
 
-				case 'v':
-						  show_version();
-						  exit(EXIT_SUCCESS);
-				case 'h':
-						  show_usage();
-						  exit(EXIT_SUCCESS);
-				default:
-						  show_usage();
-						  exit(EXIT_FAILURE);
-			}
-		}
-	}
+                case 'v':
+                          show_version();
+                          exit(EXIT_SUCCESS);
+                case 'h':
+                          show_usage();
+                          exit(EXIT_SUCCESS);
+                default:
+                          show_usage();
+                          exit(EXIT_FAILURE);
+            }
+        }
+    }
 
-	int   filedes[2];
-	char  buf;
-	pid_t child;
-	FILE *conf;
+    int   filedes[2];
+    char  buf;
+    pid_t child;
+    FILE *conf;
 
-	struct entry *entries;
+    struct entry *entries;
 
-	init_regex();
+    init_regex();
 
 
-	if (opt_debug) printf("DEBUG: main: opening config file <%s>\n", opt_config);
+    if (opt_debug) printf("DEBUG: main: opening config file <%s>\n", opt_config);
 
-	if ((conf = fopen(opt_config, "r")) == NULL)
-		err(EXIT_FAILURE, "main: fopen: <%s>", opt_config);
+    if ((conf = fopen(opt_config, "r")) == NULL)
+        err(EXIT_FAILURE, "main: fopen: <%s>", opt_config);
 
-	if ((entries = parse_config(conf)) == NULL)
-		errx(EXIT_FAILURE, "unable to parse config, or config is empty");
+    if ((entries = parse_config(conf)) == NULL)
+        errx(EXIT_FAILURE, "unable to parse config, or config is empty");
 
-	assert(entries->num_sel != 0);
+    assert(entries->num_sel != 0);
 
-	fclose(conf);
+    fclose(conf);
 
-	if (opt_debug) printf("DEBUG: main: checking for duplicate targets\n");
-	check_dupes(entries);
+    if (opt_debug) printf("DEBUG: main: checking for duplicate targets\n");
+    check_dupes(entries);
 
-	regfree(&main_line);
-	regfree(&comment_line);
+    regfree(&main_line);
+    regfree(&comment_line);
 
-	if (opt_background) {
-		if (opt_debug) printf("DEBUG: main: running in background\n");
-		if (pipe(filedes) == -1)
-			err(EXIT_FAILURE, "main: pipe");
+    if (opt_background) {
+        if (opt_debug) printf("DEBUG: main: running in background\n");
+        if (pipe(filedes) == -1)
+            err(EXIT_FAILURE, "main: pipe");
 
-		if ((child = fork()) == 0) {
-			close(filedes[0]);
-			daemon(entries, filedes[1]);
-		}
+        if ((child = fork()) == 0) {
+            close(filedes[0]);
+            daemon(entries, filedes[1]);
+        }
 
-		if (child == -1)
-			err(EXIT_FAILURE, "main: fork");
+        if (child == -1)
+            err(EXIT_FAILURE, "main: fork");
 
-		close(filedes[1]);
-	} else {
-		filedes[0] = -1; /* to fix clang analyzer */
-		if (opt_debug) printf("DEBUG: main: running in foreground\n");
-		daemon(entries, 0);
-	}
+        close(filedes[1]);
+    } else {
+        filedes[0] = -1; /* to fix clang analyzer */
+        if (opt_debug) printf("DEBUG: main: running in foreground\n");
+        daemon(entries, 0);
+    }
 
-	free_entries(entries);
+    free_entries(entries);
 
-	if (opt_background) {
-		if ((read(filedes[0], &buf, 1)) == -1)
-			err(EXIT_FAILURE, "main: read(pipe)");
+    if (opt_background) {
+        if ((read(filedes[0], &buf, 1)) == -1)
+            err(EXIT_FAILURE, "main: read(pipe)");
 
-		close(filedes[0]);
-	}
+        close(filedes[0]);
+    }
 
-	if (opt_debug) printf("DEBUG: main: exiting\n");
+    if (opt_debug) printf("DEBUG: main: exiting\n");
 
-	regfree(&rfc5242_tz);
-	exit(EXIT_SUCCESS);
+    regfree(&rfc5242_tz);
+    exit(EXIT_SUCCESS);
 }
