@@ -10,7 +10,13 @@ show_help()
 	Usage: configure [options]
 Configuration:
   --help                    print this message
+  --version                 show version information
+  --quiet                   supress output
   --target=TARGET           cross-compile target
+
+Program names:
+  --program-prefix=[PREFIX]
+
 Directory and file names:
   --bindir=DIR
   --datadir=DIR
@@ -28,21 +34,33 @@ Directory and file names:
   --sbindir=DIR
   --sharedstatedir=DIR
   --sysconfdir=DIR
-Features:
-  --enable-inet             include support for IP-based features (default)
-  --disable-inet            exclude support for IP-based features
 
+Optional features:
+  --disable-dependency-tracking
+  --enable-inet                   include support for IP-based features (default)
+  --disable-inet                  exclude support for IP-based features
+EOF
+}
+
+show_version()
+{
+	cat <<EOF
+configure script for $(cat misc/PACKAGE) version $(cat misc/VERSION)
 EOF
 }
 
 QUIET=0
 DEPS=1
 FEATURE_INET=1
+SAVED_ARGS="$*"
 
 while :; do
 	case ${1:-} in
 		-h|--help) show_help; exit ;;
 		--quiet) QUIET=1 ;;
+		--version|-v) show_version; exit ;;
+		--target=?*) TARGET=${1#*=} ;;
+# Paths
 		--bindir=?*) BINDIR=${1#*=} ;;
 		--datadir=?*) DATADIR=${1#*=} ;;
 		--datarootdir=?*) DATAROOTDIR=${1#*=} ;;
@@ -59,17 +77,16 @@ while :; do
 		--sbindir=?*) SBINDIR=${1#*=} ;;
 		--sharedstatedir=?*) SHAREDSTATEDIR=${1#*=} ;;
 		--sysconfdir=?*) SYSCONFDIR=${1#*=} ;;
-		--target=?*) TARGET=${1#*=} ;;
 # These are added to keep RPM %configure error free		
-		--build=?*) ;;
-		--host=?*) ;;
-		--program-prefix=?*) ;;
-		--program-prefix=) ;;
+		--build=?*) BUILD=${1#*=} ;;
+		--host=?*) HOST=${1#*=} ;;
+		--program-prefix=?*) PROGPREFIX=${1#*=} ;;
+		--program-prefix=) PROGPREFIX= ;;
 		--disable-dependency-tracking) DEPS=0 ;;
 		--enable-dependency-tracking) DEPS=1 ;;
 		--enable-inet) FEATURE_INET=1 ;;
 		--disable-inet) FEATURE_INET=0 ;;
-		*) [[ -n "${1-}" ]] && { echo "Unknown argument ${1}" >&2; exit 1; } ;;
+		*) [[ -n "${1-}" ]] && { echo "Unknown argument ${1-}" >&2; exit 1; } ;;
 	esac
 	shift || break
 done
@@ -91,7 +108,6 @@ fi
 # Default file locations, or use env provided ones
 
 PREFIX=${PREFIX:-/usr/local}
-[[ "${PREFIX}" = "/" ]] &&  PREFIX=""
 EXECPREFIX=${EXECPREFIX:-${PREFIX}}
 DATAROOTDIR=${DATAROOTDIR:-${PREFIX}/share}
 BINDIR=${BINDIR:-${EXECPREFIX}/bin}
@@ -108,11 +124,8 @@ SBINDIR=${SBINDIR:-${EXECPREFIX}/sbin}
 SHAREDSTATEDIR=${SHAREDSTATEDIR:-${PREFIX}/var/lib}
 SYSCONFDIR=${SYSCONFDIR:-${PREFIX}/etc}
 TARGET=${TARGET:-}
-YACC=${YACC:-yacc}
-LEX=${LEX:-lex}
-LFLAGS=${LFLAGS:-}
-YFLAGS=${YFLAGS:-}
 
+[[ "${PREFIX}" = "/" ]] && PREFIX=""
 [[ -n "${TARGET}" ]] && TOOL="${TARGET}-" || TOOL=""
 
 # Default compiler flags
@@ -121,70 +134,26 @@ CFLAGS=${CFLAGS:--O2 -Wall -Wextra}
 CPPFLAGS=${CPPFLAGS:-}
 LDFLAGS=${LDFLAGS:-}
 TARGET=${TARGET:-}
+LFLAGS=${LFLAGS:-}
+YFLAGS=${YFLAGS:-}
 
 # Location of default tools
 
 PKG_CONFIG=${PKG_CONFIG:-pkg-config}
-CC=${CC:-${TOOL}gcc}
-CXX=${CXX:-${TOOL}g++}
+CC=${CC:-${TOOL}cc}
+CXX=${CXX:-${TOOL}c++}
+AR=${AR:-${TOOL}ar}
+RANLIB=${RANLIB:-${TOOL}ranlib}
+YACC=${YACC:-yacc}
+LEX=${LEX:-lex}
 
 # Predefined values, which should not be easily changed
 
+[[ -f "${SRCDIR}/misc/VERSION" && -r "${SRCDIR}/misc/VERSION" ]] || fail "Cannot read misc/VERSION"
+[[ -f "${SRCDIR}/misc/PACKAGE" && -r "${SRCDIR}/misc/PACKAGE" ]] || fail "Cannot read misc/PACKAGE"
+
 PACKAGE=$(cat "${SRCDIR}"/misc/PACKAGE)
 VERSION=$(cat "${SRCDIR}"/misc/VERSION)
-
-# Check for a c compiler (mandatory)
-
-echo -n "Checking for a C compiler ... "
-if [[ ! -x "$(which "${CC}")" ]]; then
-	fail "Error: CC not valid"
-else
-	export CC
-	which "${CC}" | tee -a config.log
-fi
-
-echo -n "Checking $(basename "${CC}") can produce executables ... "
-echo -e '#include <stdlib.h>\nmain() {exit(0);}' | \
-	if ${CC} -xc -o /dev/null - 2>>config.log; then 
-		echo "Ok"
-	else 
-		{ echo "Fail"; exit 1; } 
-	fi
-
-HOST_MACHINE=$(${CC} -dumpmachine)
-
-echo -n "Configuring ${PACKAGE} ${VERSION} on ${HOST_MACHINE}"
-[[ -n "${TARGET}" ]] &&	echo " for target ${TARGET}" || echo ""
-
-echo "objdir = ${OBJDIR} / srcdir = ${SRCDIR}"
-
-# List of system headers we need to check for
-
-H_FILES="stdlib.h syslog.h err.h stdio.h ctype.h string.h strings.h regex.h stdbool.h sys/types.h unistd.h sys/stat.h fcntl.h signal.h sys/socket.h sys/un.h sys/wait.h time.h errno.h sys/select.h netdb.h netinet/in.h arpa/inet.h sys/time.h limits.h assert.h"
-
-# List of system functions to check for function:arg0,arg1
-
-FUNC_CHECK="strptime:NULL,NULL,NULL err:0,NULL warn:NULL"
-
-# List of pkg-config things to check for
-
-PKG_CHECK=""
-
-# List of libraries to check for here
-
-LIB_CHECK=""
-
-# Application specific variables
-
-# Check for pkg-config (mandatory)
-
-echo -n "Checking for pkg-config ... "
-if [[ ! -x "$(which "${PKG_CONFIG}")" ]]; then
-	fail "Error: PKG_CONFIG not valid"
-fi
-
-export PKG_CONFIG
-which "${PKG_CONFIG}"
 
 # Support functions
 
@@ -218,12 +187,11 @@ check_lib()
 {
 	local F=/tmp/$$.c
 
-	echo "#define _GNU_SOURCE" >${F}
+	echo "#define _XOPEN_SOURCE 700" >${F}
 	echo 'main(){}' >>${F}
 	echo -n "Checking for -l${1} ... "
 	# shellcheck disable=SC2086
-	"${CC}" ${LDFLAGS} ${CPPFLAGS} ${CFLAGS} "-l${1}" "${F}" \
-		-o /dev/null 2>>config.log
+	"${CC}" ${LDFLAGS} ${CPPFLAGS} ${CFLAGS} -l"${1}" "${F}" -o /dev/null 2>>config.log
 	local RT=$?
 	ok ${RT}
 	rm -f ${F}
@@ -257,6 +225,91 @@ check_func()
 	rm -f ${F}
 	return ${RT}
 }
+
+check_yacc()
+{
+	local F
+	F=$(mktemp); trap "{ rm -f \"${F}\"; }" EXIT
+
+	# shellcheck disable=SC2086
+	echo -e '%%\nstart: ;\n%%\n' | \
+		"${YACC}" ${YFLAGS} -o "${F}" -
+	local RT=$?
+
+	rm -f "${F}"
+	return ${RT}
+}
+
+check_lex()
+{
+	local F
+	F=$(mktemp); trap "{ rm -f \"${F}\"; }" EXIT
+	
+	# shellcheck disable=SC2086
+	echo -e '%x TEMP\n%option stack bison-bridge reentrant\n%%\n. { ECHO; }\n%%\n' | \
+		"${LEX}" ${LFLAGS} -o "${F}" -
+	local RT=$?
+
+	rm -f "${F}"
+	return ${RT}
+}
+
+# Check for a c compiler (mandatory)
+
+echo -n "Checking for a C compiler ... "
+if [[ ! -x "$(which "${CC}")" ]]; then
+	fail "Error: CC not valid"
+else
+	export CC
+	which "${CC}" | tee -a config.log
+fi
+
+echo -n "Checking $(basename "${CC}") can produce executables ... "
+echo -e '#include <stdlib.h>\nmain() {exit(0);}' | \
+	if "${CC}" -xc -o /dev/null - 2>>config.log; then 
+		echo "ok"
+	else
+		fail "${CC} cannot produce executables"
+	fi
+
+HOST_MACHINE=$(${CC} -dumpmachine)
+
+echo -n "Configuring ${PACKAGE} ${VERSION} on ${HOST_MACHINE}"
+[[ -n "${TARGET}" ]] &&	echo " for target ${TARGET}" || echo ""
+
+echo "objdir = ${OBJDIR}; srcdir = ${SRCDIR};"
+
+# List of system headers we need to check for
+
+H_FILES="assert.h ctype.h err.h errno.h fcntl.h limits.h regex.h signal.h stdbool.h stdio.h stdlib.h string.h strings.h sys/select.h sys/socket.h sys/stat.h sys/time.h sys/types.h sys/un.h sys/wait.h syslog.h time.h unistd.h"
+
+# List of system functions to check for function:arg0,arg1
+
+FUNC_CHECK=""
+
+# List of pkg-config things to check for
+
+PKG_CHECK=""
+
+# List of libraries to check for here
+
+LIB_CHECK=""
+
+# List of tools to check for here
+
+TOOL_CHECK=""
+
+# Application specific variables
+
+# Check for pkg-config (mandatory)
+
+echo -n "Checking for pkg-config ... "
+if [[ ! -x "$(which "${PKG_CONFIG}")" ]]; then
+	fail "Error: PKG_CONFIG not valid"
+fi
+
+export PKG_CONFIG
+which "${PKG_CONFIG}"
 
 # start a new configuration file
 if [[ -e ${OBJDIR}/config.h ]]; then 
@@ -301,7 +354,29 @@ for f in ${FUNC_CHECK}; do
 	fi
 done
 
-# Append any *DIR variables to config.h here
+for f in ${TOOL_CHECK}; do
+	if ! which "${f}" >/dev/null 2>&1; then
+		fail "Error: ${f} not found"
+	fi
+done
+
+if [[ "${YACC}" ]]; then
+	echo -n "Checking $(basename "${YACC}") works ... "
+	if check_yacc 2>>config.log; then
+		echo "ok"
+	else
+		fail "provided YACC not functioning"
+	fi
+fi
+
+if [[ "${LEX}" ]]; then
+	echo -n "Checking $(basename "${LEX}") works ... "
+	if check_lex 2>>config.log; then
+		echo "ok"
+	else
+		fail "provided LEX not functioning"
+	fi
+fi
 
 if [[ FEATURE_INET -eq 1 ]]; then
 	echo "#define ENABLE_INET 1" >> "${OBJDIR}"/config.h
@@ -322,6 +397,8 @@ ARGS=$(cat <<- __END
 	s#@@CFLAGS@@#${CFLAGS}#;
 	s#@@CPPFLAGS@@#${CPPFLAGS}#;
 	s#@@CXX@@#${CXX}#;
+	s#@@AR@@#${AR}#;
+	s#@@RANLIB@@#${RANLIB}#;
 	s#@@LFLAGS@@#${LFLAGS}#;
 	s#@@YFLAGS@@#${YFLAGS}#;
 	s#@@DATADIR@@#${DATADIR}#;
@@ -346,6 +423,22 @@ __END
 )
 
 sed "${ARGS}" <"${SRCDIR}"/Makefile.in >"${OBJDIR}"/Makefile
+
+echo "Creating config.status"
+
+cat > "config.status" <<- __END
+	#!/usr/bin/env sh
+
+	# Created via:
+	# $0 ${SAVED_ARGS}
+
+	set -o errexit
+	set -o pipefail
+	set -o nounset
+
+	$0 ${SAVED_ARGS}
+__END
+chmod +x config.status
 
 echo "Please type make to continue"
 

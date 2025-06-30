@@ -12,8 +12,8 @@ CXX             := @@CXX@@
 LEX             := @@LEX@@
 YACC		    := @@YACC@@
 LFLAGS          := @@LFLAGS@@
-YFLAGS          := @@YFLAGS@@ -d -t
-CFLAGS          := @@CFLAGS@@ -std=c11
+YFLAGS          := -d -t @@YFLAGS@@
+CFLAGS          := -std=c2x @@CFLAGS@@
 CPPFLAGS        := @@CPPFLAGS@@ -DNDEBUG
 LDFLAGS         := -L$(srcdir)/src -L$(objdir) -L. @@LDFLAGS@@
 CAT             := cat
