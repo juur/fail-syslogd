@@ -307,6 +307,9 @@ if [[ FEATURE_INET -eq 1 ]]; then
 	echo "#define ENABLE_INET 1" >> "${OBJDIR}"/config.h
 fi
 
+# Finish config.h
+echo "#define SYSCONFDIR \"${SYSCONFDIR}\"" >> "${OBJDIR}"/config.h
+
 # Create Makefile from template
 
 echo "Writing Makefile"

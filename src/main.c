@@ -143,10 +143,10 @@ static time_t  last_mark;
  */
 static const char main_line_re[]     = "^[[:space:]]*([0-9A-Za-z,!=*;.]+);?[[:space:]]+([-:*_0-9/@A-Za-z.]+)[[:space:]]*(#.*)?$";
 static const char comment_line_re[]  = "^[[:space:]]*#.*$";
-static const char rfc5242_tz_re[]    = "^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})\\.([0-9]{1,6})((Z)|([+-][0-9]{2}:[0-9]{2}))$";
+static const char rfc5242_tz_re[]    = "^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})\\.([0-9]{1,6})((Z)|([-+][0-9]{2}:[0-9]{2}))$";
 
 static const char default_mainsock[] = "/tmp/log";
-static const char default_config[]   = "syslogd.conf";
+static const char default_config[]   = SYSCONFDIR "/syslogd.conf";
 
 static const struct { 
     const char *const name; 
